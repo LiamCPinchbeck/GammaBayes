@@ -194,9 +194,8 @@ class MTree:
             product *= node.value
         return product
 
-    def create_tree(self, layout:list|dict, values:list=None, 
-                            parent:MTreeNode=None, index=0, no_values=True,
-                            equivalent_weight_node_mappings:list[list]=None):
+    def _create_tree(self, layout:list|dict, values:list=None, 
+                            parent:MTreeNode=None, index=0, no_values=True):
         """Create a tree from a layout and optional values.
 
         Args:
@@ -236,12 +235,22 @@ class MTree:
                     values[index:index] = [1/num_in_layer]*num_in_layer
 
 
-                index = self.create_tree(layout=list(item.values())[0], values=values, parent=new_node, index=index, no_values=no_values)
+                index = self._create_tree(layout=list(item.values())[0], values=values, parent=new_node, index=index, no_values=no_values)
 
             else:
                 # Base case: item is an ID
                 new_node = self.add(values[index], parent, id=item)
                 index += 1
+
+        return index
+
+    def create_tree(self, layout:list|dict, values:list=None, 
+                            parent:MTreeNode=None, index=0, no_values=True,
+                            equivalent_weight_node_mappings:list[list]=None):
+
+        self._create_tree(layout=layout, values=None, 
+                            parent=parent, index=index, 
+                            no_values=no_values)
 
         if not(equivalent_weight_node_mappings is None):
             self.equivalent_weight_node_mappings = equivalent_weight_node_mappings
@@ -249,9 +258,12 @@ class MTree:
         # Just to make this clear that it will use the stored value
         else:
             self.equivalent_weight_node_mappings = self.equivalent_weight_node_mappings
-        
+
+
+        self.overwrite(values=values)
 
         return index
+
 
     def _tree_str(self, node:MTreeNode=None, level:int=0, prefix:str="", precision:str='3g', prev_str:str="", print_ids:bool=False):
         """Generate a string representation of the tree.
