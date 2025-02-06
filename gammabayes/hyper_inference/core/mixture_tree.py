@@ -82,7 +82,7 @@ class MTree:
         leaves: List of leaf nodes in the tree.
         leaf_values: Dictionary of leaf node values.
     """
-    def __init__(self, root:MTreeNode=None, equivalent_weight_node_mappings:list[dict]=None):
+    def __init__(self, root:MTreeNode=None, equivalent_weight_node_mappings:list[list]=None):
         """Initialize the tree with an optional root node.
 
         Args:
@@ -98,7 +98,7 @@ class MTree:
         if not(equivalent_weight_node_mappings is None):
             self.equivalent_weight_node_mappings = equivalent_weight_node_mappings 
         else:
-            self.equivalent_weight_node_mappings = {}
+            self.equivalent_weight_node_mappings = []
          
         self.refresh_leaves()
 
@@ -196,7 +196,7 @@ class MTree:
 
     def create_tree(self, layout:list|dict, values:list=None, 
                             parent:MTreeNode=None, index=0, no_values=True,
-                            equivalent_weight_node_mappings:list[dict]=None):
+                            equivalent_weight_node_mappings:list[list]=None):
         """Create a tree from a layout and optional values.
 
         Args:
@@ -383,24 +383,22 @@ class MTree:
 
         if _check_equivalencies:
             # Check if there are equivalent nodes, and if so remove them
-            for equivalency_key, equivalent_node_list in self.equivalent_weight_node_mappings.items():
+            for equivalent_node_list in self.equivalent_weight_node_mappings:
 
                 # Check if there are equivalent nodes
-                if node_to_delete.id == equivalency_key or node_to_delete.id in equivalent_node_list:
+                if node_to_delete.id in equivalent_node_list:
 
-                    # Make flat list of node ids
-                    id_list = [equivalency_key] + equivalent_node_list
-                    print("Equivalency exists?: ", node_to_delete.id, id_list)
+                    print("Equivalency exists?: ", node_to_delete.id, equivalent_node_list)
 
                     # iterate thourgh list of ids
-                    for iden in id_list:
-                        print("Node iden being checked: ", iden)
+                    for equivalent_node_id in equivalent_node_list:
+                        print("Node iden being checked: ", equivalent_node_id)
                         # If identifications exactly match then the removal should be taken care of 
                             # by the rest of the function. So skip this (actually the same) node
-                        if iden!=node_to_delete.id:
-                            print("Equivalent node to delete: ", iden)
+                        if equivalent_node_id!=node_to_delete.id:
+                            print("Equivalent node to delete: ", equivalent_node_id)
                             # If not equal carry on recurrence
-                            self.delete_node(iden, _check_equivalencies=False)
+                            self.delete_node(equivalent_node_id, _check_equivalencies=False)
                 break
 
 
