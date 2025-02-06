@@ -388,15 +388,11 @@ class MTree:
                 # Check if there are equivalent nodes
                 if node_to_delete.id in equivalent_node_list:
 
-                    print("Equivalency exists?: ", node_to_delete.id, equivalent_node_list)
-
                     # iterate thourgh list of ids
                     for equivalent_node_id in equivalent_node_list:
-                        print("Node iden being checked: ", equivalent_node_id)
                         # If identifications exactly match then the removal should be taken care of 
                             # by the rest of the function. So skip this (actually the same) node
                         if equivalent_node_id!=node_to_delete.id:
-                            print("Equivalent node to delete: ", equivalent_node_id)
                             # If not equal carry on recurrence
                             self.delete_node(equivalent_node_id, _check_equivalencies=False)
                 break
@@ -420,6 +416,10 @@ class MTree:
         value_index = 0  # Start from the first provided value
 
 
+        _check_equivalencies = True
+        if len(values)==len(self.nodes):
+            _check_equivalencies = False
+
         completed_node_ids = ['root']
         while queue and value_index < len(values):
             current_node = queue.pop(0)
@@ -429,20 +429,24 @@ class MTree:
                 # Update current node's value
                 current_node.value = values[value_index]
 
+                if _check_equivalencies:
+                    for equivalent_node_list in self.equivalent_weight_node_mappings:
+                        # Check if there are equivalent nodes
 
-                for equivalent_node_list in self.equivalent_weight_node_mappings:
-                    # Check if there are equivalent nodes
-                    if current_node.id in equivalent_node_list:
-                        for node_id in equivalent_node_list:
-                            self.nodes[node_id] = values[value_index]
-                            completed_node_ids.append(node_id)
-                    break
+                        if current_node.id in equivalent_node_list:
+                            for node_id in equivalent_node_list:
+                                if node_id!=current_node.id:
+                                    self.nodes[node_id].value = values[value_index]
+                                    completed_node_ids.append(node_id)
+                            break
+
+
 
 
                 value_index += 1  # Move to the next value
 
-                # Add children of the current nodes to the queue
-                queue = list(current_node.children)+queue
+            # Add children of the current nodes to the queue
+            queue = list(current_node.children)+queue
 
         # After updating, recompute leaf values
         self.refresh_leaves()
