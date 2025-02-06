@@ -94,7 +94,12 @@ class MTree:
         else:
             self.root = root
             self.nodes = {node.id: node for node in self.collect_nodes(root)}
-        self.equivalent_weight_node_mappings = equivalent_weight_node_mappings
+
+        if not(equivalent_weight_node_mappings is None):
+            self.equivalent_weight_node_mappings = equivalent_weight_node_mappings 
+        else:
+            self.equivalent_weight_node_mappings = {}
+         
         self.refresh_leaves()
 
     def collect_nodes(self, node:MTreeNode):
@@ -238,7 +243,14 @@ class MTree:
                 new_node = self.add(values[index], parent, id=item)
                 index += 1
 
+        if not(equivalent_weight_node_mappings is None):
+            self.equivalent_weight_node_mappings = equivalent_weight_node_mappings
+
+        # Just to make this clear that it will use the stored value
+        else:
+            self.equivalent_weight_node_mappings = self.equivalent_weight_node_mappings
         
+
         return index
 
     def _tree_str(self, node:MTreeNode=None, level:int=0, prefix:str="", precision:str='3g', prev_str:str="", print_ids:bool=False):
@@ -329,28 +341,11 @@ class MTree:
             node (MTreeNode): The node whose children are to be removed.
         """
 
+
         # iterate over a copy of the list, as otherwise when iterating
             # the list itself could be changing
         for child in node.children[:]:  
             self._remove_children(child)  # recursively remove children
-
-            # # Check if there are equivalent nodes, and if so remove them
-            # for equivalency_key, equivalent_node_list in self.equivalent_weight_node_mappings.items():
-
-            #     # Check if there are equivalent nodes
-            #     if child.id == equivalency_key or child.id in equivalent_node_list:
-
-            #         # Make flat list of node ids
-            #         id_list = [equivalency_key] + equivalent_node_list
-
-            #         # iterate thourgh list of ids
-            #         for iden in id_list:
-
-            #             # If identifications exactly match then the removal should be taken care of 
-            #                 # by the rest of the function. So skip this (actually the same) node
-            #             if iden!=child.id:
-            #                 # If not equal carry on recurrence
-            #                 self._remove_children(self.nodes[iden])
         
             del self.nodes[child.id]  # remove child from nodes dictionary
 
@@ -358,7 +353,7 @@ class MTree:
         node.children.clear()  
 
 
-    def delete_node(self, node_id:str|int):
+    def delete_node(self, node_id:str|int, _check_equivalencies=True):
         """Delete a node and its children from the tree.
 
         Args:
@@ -385,6 +380,31 @@ class MTree:
 
         # Finally, remove the node itself from the nodes dictionary
         del self.nodes[node_id]
+
+        if _check_equivalencies:
+            # Check if there are equivalent nodes, and if so remove them
+            for equivalency_key, equivalent_node_list in self.equivalent_weight_node_mappings.items():
+
+                # Check if there are equivalent nodes
+                if node_to_delete.id == equivalency_key or node_to_delete.id in equivalent_node_list:
+
+                    # Make flat list of node ids
+                    id_list = [equivalency_key] + equivalent_node_list
+                    print("Equivalency exists?: ", node_to_delete.id, id_list)
+
+                    # iterate thourgh list of ids
+                    for iden in id_list:
+                        print("Node iden being checked: ", iden)
+                        # If identifications exactly match then the removal should be taken care of 
+                            # by the rest of the function. So skip this (actually the same) node
+                        if iden!=node_to_delete.id:
+                            print("Equivalent node to delete: ", iden)
+                            # If not equal carry on recurrence
+                            self.delete_node(iden, _check_equivalencies=False)
+                break
+
+
+
 
         # Refresh the leaves and leaf values since the structure of the tree has changed
         self.refresh_leaves()
