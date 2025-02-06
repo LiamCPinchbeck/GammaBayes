@@ -419,14 +419,30 @@ class MTree:
         queue = list(self.root.children)  # Start with the root node
         value_index = 0  # Start from the first provided value
 
+
+        completed_node_ids = ['root']
         while queue and value_index < len(values):
             current_node = queue.pop(0)
-            # Update current node's value
-            current_node.value = values[value_index]
-            value_index += 1  # Move to the next value
 
-            # Add children of the current nodes to the queue
-            queue = list(current_node.children)+queue
+            if current_node.id not in completed_node_ids:
+                completed_node_ids.append(current_node.id)
+                # Update current node's value
+                current_node.value = values[value_index]
+
+
+                for equivalent_node_list in self.equivalent_weight_node_mappings:
+                    # Check if there are equivalent nodes
+                    if current_node.id in equivalent_node_list:
+                        for node_id in equivalent_node_list:
+                            self.nodes[node_id] = values[value_index]
+                            completed_node_ids.append(node_id)
+                    break
+
+
+                value_index += 1  # Move to the next value
+
+                # Add children of the current nodes to the queue
+                queue = list(current_node.children)+queue
 
         # After updating, recompute leaf values
         self.refresh_leaves()
