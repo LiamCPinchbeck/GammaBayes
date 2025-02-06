@@ -260,7 +260,8 @@ class MTree:
             self.equivalent_weight_node_mappings = self.equivalent_weight_node_mappings
 
 
-        self.overwrite(values=values)
+        if not(values is None):
+            self.overwrite(values=values)
 
         return index
 
@@ -428,10 +429,6 @@ class MTree:
         value_index = 0  # Start from the first provided value
 
 
-        _check_equivalencies = True
-        if len(values)==len(self.nodes):
-            _check_equivalencies = False
-
         completed_node_ids = ['root']
         while queue and value_index < len(values):
             current_node = queue.pop(0)
@@ -441,16 +438,15 @@ class MTree:
                 # Update current node's value
                 current_node.value = values[value_index]
 
-                if _check_equivalencies:
-                    for equivalent_node_list in self.equivalent_weight_node_mappings:
-                        # Check if there are equivalent nodes
+                for equivalent_node_list in self.equivalent_weight_node_mappings:
+                    # Check if there are equivalent nodes
 
-                        if current_node.id in equivalent_node_list:
-                            for node_id in equivalent_node_list:
-                                if node_id!=current_node.id:
-                                    self.nodes[node_id].value = values[value_index]
-                                    completed_node_ids.append(node_id)
-                            break
+                    if current_node.id in equivalent_node_list:
+                        for node_id in equivalent_node_list:
+                            if node_id!=current_node.id:
+                                self.nodes[node_id].value = values[value_index]
+                                completed_node_ids.append(node_id)
+                        break
 
 
 
