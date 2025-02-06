@@ -82,7 +82,7 @@ class MTree:
         leaves: List of leaf nodes in the tree.
         leaf_values: Dictionary of leaf node values.
     """
-    def __init__(self, root:MTreeNode=None):
+    def __init__(self, root:MTreeNode=None, equivalent_weight_node_mappings:list[dict]=None):
         """Initialize the tree with an optional root node.
 
         Args:
@@ -94,6 +94,7 @@ class MTree:
         else:
             self.root = root
             self.nodes = {node.id: node for node in self.collect_nodes(root)}
+        self.equivalent_weight_node_mappings = equivalent_weight_node_mappings
         self.refresh_leaves()
 
     def collect_nodes(self, node:MTreeNode):
@@ -188,7 +189,9 @@ class MTree:
             product *= node.value
         return product
 
-    def create_tree(self, layout:list|dict, values:list=None, parent:MTreeNode=None, index=0, no_values=True):
+    def create_tree(self, layout:list|dict, values:list=None, 
+                            parent:MTreeNode=None, index=0, no_values=True,
+                            equivalent_weight_node_mappings:list[dict]=None):
         """Create a tree from a layout and optional values.
 
         Args:
@@ -235,7 +238,7 @@ class MTree:
                 new_node = self.add(values[index], parent, id=item)
                 index += 1
 
-
+        
         return index
 
     def _tree_str(self, node:MTreeNode=None, level:int=0, prefix:str="", precision:str='3g', prev_str:str="", print_ids:bool=False):
@@ -330,6 +333,25 @@ class MTree:
             # the list itself could be changing
         for child in node.children[:]:  
             self._remove_children(child)  # recursively remove children
+
+            # # Check if there are equivalent nodes, and if so remove them
+            # for equivalency_key, equivalent_node_list in self.equivalent_weight_node_mappings.items():
+
+            #     # Check if there are equivalent nodes
+            #     if child.id == equivalency_key or child.id in equivalent_node_list:
+
+            #         # Make flat list of node ids
+            #         id_list = [equivalency_key] + equivalent_node_list
+
+            #         # iterate thourgh list of ids
+            #         for iden in id_list:
+
+            #             # If identifications exactly match then the removal should be taken care of 
+            #                 # by the rest of the function. So skip this (actually the same) node
+            #             if iden!=child.id:
+            #                 # If not equal carry on recurrence
+            #                 self._remove_children(self.nodes[iden])
+        
             del self.nodes[child.id]  # remove child from nodes dictionary
 
         # Clear the children list after removal
