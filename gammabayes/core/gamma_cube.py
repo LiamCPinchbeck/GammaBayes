@@ -556,7 +556,8 @@ it is assumed that the binning geometries are the same.""")
 
         output_dict = {
             'name': self.name,
-            'binned_data': self.binned_data,
+            'binned_event_values': self.binned_unique_coordinate_data[0],
+            'binned_event_value_weight': self.binned_unique_coordinate_data[1],
             'pointing_dirs': pointing_dirs_value,
             'pointing_dirs_unit': pointing_dirs_unit,
             'live_times': live_times_value,
@@ -598,7 +599,7 @@ it is assumed that the binning geometries are the same.""")
         pointing_dirs = info_dict.get('pointing_dirs')
         if (info_dict.get('pointing_dirs_unit') is not None):
             pointing_dirs = pointing_dirs*u.Unit(info_dict.get('pointing_dirs_unit'))
-        elif isinstance(pointing_dirs, ArrayLike): 
+        elif isinstance(pointing_dirs, np.ndarray): 
             if hasattr(pointing_dirs, "unit"):
                 pointing_dirs_value = pointing_dirs.value
             else:
@@ -612,7 +613,8 @@ it is assumed that the binning geometries are the same.""")
             if not(isinstance(live_times, float)):
                 live_times = None
             
-        if (info_dict.get('live_times_unit') is not None) and not(np.isnan(info_dict.get('live_times_unit'))):
+        print(live_times)
+        if (info_dict.get('live_times_unit') is not None) and not(live_times is None):
             live_times = live_times*u.Unit(info_dict.get('live_times_unit'))
 
         try:
@@ -643,11 +645,11 @@ it is assumed that the binning geometries are the same.""")
     
 
     @classmethod
-    def load(cls, filename, aux_info: dict):
+    def load(cls, filename, aux_info: dict={}):
         with open(filename, 'rb') as f:
             data = pickle.load(f)
 
-        return cls.load_from_dict(data)
+        return cls.load_from_dict(data, aux_info=aux_info)
             
 
 

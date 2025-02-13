@@ -203,6 +203,7 @@ class DiscreteBruteScan(object):
                 parameter_specifications=prior_parameter_specifications,
                 _no_required_num=self.no_priors_on_init)
 
+
         self.nuisance_binning_geomtry = GammaBinning(*self.nuisance_axes)
 
         if log_likelihoodnormalisation is None:
@@ -397,9 +398,9 @@ class DiscreteBruteScan(object):
                 # ParameterSpecification
                 prior_parameter_specifications = self.prior_parameter_specifications[_prior_idx].scan_format
 
+
                 prior_spectral_params   = prior_parameter_specifications['spectral_parameters']
                 prior_spatial_params    = prior_parameter_specifications['spatial_parameters']
-
 
                 prior_marged_shapes[_prior_idx] = (Nevents, 
                                                    *[parameter_specification.size for parameter_specification in prior_spectral_params.values()],

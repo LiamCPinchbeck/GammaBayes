@@ -52,7 +52,7 @@ class CustomDMRatiosModel(object):
                  irf_loglike:DiscreteLogLikelihood, 
                  axes: list | tuple | np.ndarray,
                  spatial_class: DM_Profile = Einasto_Profile, 
-                 
+                 spatial_class_kwds: dict= None,
                  name='DM',
                  channels: list[str] | str = 'all',
                  default_spectral_parameters: dict = {},
@@ -133,12 +133,18 @@ class CustomDMRatiosModel(object):
 
             spectral_class_kwds['channel'] = channel
 
-            self.channel_prior_dict[channel] = CombineDMComps(name=f"{channel} DM Class",
+            if spatial_class_kwds is not None:
+                name=f"{channel} DM " + str(spatial_class_kwds) + " Class"
+            else:
+                name=f"{channel} DM Class"
+
+            self.channel_prior_dict[channel] = CombineDMComps(name=name,
                         spectral_class = SingleDMChannel, 
                         spatial_class = spatial_class,
                         irf_loglike=irf_loglike, 
                         axes=axes, 
                         spectral_class_kwds = spectral_class_kwds,
+                        spatial_class_kwds = spatial_class_kwds,
                         default_spectral_parameters=default_spectral_parameters,
                         default_spatial_parameters=default_spatial_parameters,
                         *args, **kwargs

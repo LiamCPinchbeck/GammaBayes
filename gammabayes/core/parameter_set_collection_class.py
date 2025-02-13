@@ -30,6 +30,7 @@ class ParameterSetCollection:
                  parameter_meta_data: dict = None,
                  observational_prior_names: list = None,
                  collection_name = "",
+                 mixture_tree = None,
                  ):
         """
         Initializes a ParameterSetCollection instance.
@@ -68,6 +69,8 @@ class ParameterSetCollection:
 
         self.mixture_parameter_set = mixture_parameter_set
 
+        self.mixture_tree = mixture_tree
+
         self.setup_discrete_prior_parameter_transform_intermediaries()
 
 
@@ -93,35 +96,44 @@ class ParameterSetCollection:
 
         # First few indices of the unit cube are predesignated to be for the mixture weights
             # just for a consistent convention
+        completed_equivalent_node_ids = []
         for mixture_param in self.mixture_parameter_set.values():
-            new_mix = True
+            if not(mixture_param['name'] in completed_equivalent_node_ids):
+                new_mix = True
 
-            for mix_hyper_idx, mix_hyper_info in self.hyper_param_index_to_info_dict.items():
+                for mix_hyper_idx, mix_hyper_info in self.hyper_param_index_to_info_dict.items():
 
-                if mixture_param['name'] in mix_hyper_info['dependent'] and new_mix:
-                    new_mix = False
-                    self.prior_transform_list[mix_hyper_idx]
-                    self.prior_transform_list[mix_hyper_idx][1].append(hyper_param_idx)
-                    mixture_param['dependent'] = []
-                    
-                    self.prior_transform_list.append([self._dummy_prior_transform, [0]])
-
-
+                    if mixture_param['name'] in mix_hyper_info['dependent'] and new_mix:
+                        new_mix = False
+                        self.prior_transform_list[mix_hyper_idx]
+                        self.prior_transform_list[mix_hyper_idx][1].append(hyper_param_idx)
+                        mixture_param['dependent'] = []
+                        
+                        self.prior_transform_list.append([self._dummy_prior_transform, [0]])
 
 
-            self.hyper_param_index_to_info_dict[hyper_param_idx] = {'_internal_name': mixture_param['_internal_name'], 
-                                                                    'name': mixture_param['name'], 
-                                                                    'prior_param_axes': [],
-                                                                    'log_nuisance_marg_slice_indices':[],
-                                                                    'dependent': mixture_param['dependent'],
-                                                                    }
 
-            if new_mix:
 
-                self.prior_transform_list.append([mixture_param.unitcube_transform, [hyper_param_idx]])
-                self.unique_parameter_list.append([mixture_param, [hyper_param_idx]])
+                self.hyper_param_index_to_info_dict[hyper_param_idx] = {'_internal_name': mixture_param['_internal_name'], 
+                                                                        'name': mixture_param['name'], 
+                                                                        'prior_param_axes': [],
+                                                                        'log_nuisance_marg_slice_indices':[],
+                                                                        'dependent': mixture_param['dependent'],
+                                                                        }
+                if self.mixture_tree is not None:
+                    has_equiv_nodes = False
+                    for equivalent_nodes in self.mixture_tree.equivalent_weight_node_mappings:
+                        if mixture_param['name'] in equivalent_nodes:
+                            has_equiv_nodes = True
+                            completed_equivalent_node_ids.extend(equivalent_nodes)
+                            
 
-            hyper_param_idx+=1
+                if new_mix:
+
+                    self.prior_transform_list.append([mixture_param.unitcube_transform, [hyper_param_idx]])
+                    self.unique_parameter_list.append([mixture_param, [hyper_param_idx]])
+
+                hyper_param_idx+=1
 
 
 

@@ -81,10 +81,10 @@ class ScanOutput_StochasticTreeMixturePosterior(object):
         self.parameter_set_collection = ParameterSetCollection(
             parameter_sets            = self.prior_parameter_specifications,
             mixture_parameter_set     = self.mixture_parameter_specifications,
-            shared_parameters         = self.shared_parameters,
+            shared_parameters         = self.shared_parameters, 
             parameter_meta_data       = {},
             observational_prior_names = observational_prior_names,
-
+            mixture_tree              = self.mixture_tree,
             collection_name = 'ScanOutput_Stochastic_MixtureFracPosterior parameter set collection'
         )
 
@@ -109,7 +109,7 @@ class ScanOutput_StochasticTreeMixturePosterior(object):
 #                 self.mixture_bounds.append([0., 1.])
 
         # -1 is to not count the root node, which is always 1.
-        self.num_mixes   = len(self.mixture_tree.nodes)-1
+        self.num_mixes   = len(self.mixture_tree.nodes)-1 -sum([len(equiv_nodes)-1 for equiv_nodes in self.mixture_tree.equivalent_weight_node_mappings])
 
         if event_weights is None:
             event_weights = np.ones(shape=(len(log_nuisance_marg_results[0]),))

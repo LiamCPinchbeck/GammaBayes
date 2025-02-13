@@ -293,7 +293,6 @@ class ParameterSet(object):
             if 'parameter_type' in parameter:
                 type_key = parameter['parameter_type']
 
-
                 if type_key in self.axes_by_type:
                     if 'axis' in parameter:
                         self.axes_by_type[type_key][param_name] = parameter['axis']
