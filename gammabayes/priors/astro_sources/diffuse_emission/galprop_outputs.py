@@ -139,9 +139,12 @@ Medium (the default) should take up about 130MB of disk space while High takes u
 
     template_model = EnergySpatialTemplateInterpolator(
         binning_geometry=galprop_binning_geometry,
-        data=reformatted_data_matrix/galprop_binning_geometry.energy_axis.value[:, None, None]**2*(u.TeV/u.MeV).to(""),
+        data=reformatted_data_matrix/galprop_binning_geometry.energy_axis.value[:, None, None]**2*((u.TeV/u.MeV) * ((u.m)**2/(u.cm)**2) * ((u.deg**2)/(u.sr))).to(""),
         interpolation_method='linear'
         )
+
+    # Subsequent units for all components is originally MeV^2 cm^{-2} s^{-1} sr^{-1} MeV^{-1}
+        # After above manipulation is m^{-2} s^{-1} deg^{-2} TeV^{-1}
 
 
 

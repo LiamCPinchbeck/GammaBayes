@@ -31,6 +31,10 @@ Axis values represent bin centres. Bin edges can be extracted with the 'axis nam
     @property
     def lat_res(self):
         return np.diff(self.lat_axis)[0]
+
+    @property
+    def energy_bins_per_decade(self):
+        return 1/np.median(np.diff(np.log10(self.energy_axis)))
     
     @property
     def axes_mesh(self):

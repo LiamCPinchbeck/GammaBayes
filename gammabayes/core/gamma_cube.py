@@ -272,7 +272,7 @@ class GammaObs:
         
         spatial_hist2d_output = axs[1].hist2d(
             self.lon.value, self.lat.value, 
-            bins=[self.binning_geometry.lon_axis.value, self.binning_geometry.lat_axis.value],
+            bins=[self.binning_geometry.lon_edges.value, self.binning_geometry.lat_edges.value],
             norm=count_scaling, cmap=cmap)
         plt.colorbar(spatial_hist2d_output[3], ax=axs[1], label='Counts')
 
@@ -319,8 +319,8 @@ class GammaObs:
 
     @property
     def nonzero_bin_data(self):
-        binned_unique_coordinate_data = self.binned_unique_coordinate_data
-        return binned_unique_coordinate_data[:-1], binned_unique_coordinate_data[-1]
+
+        return self.binned_unique_coordinate_data[:-1], self.binned_unique_coordinate_data[-1]
 
 
     @property

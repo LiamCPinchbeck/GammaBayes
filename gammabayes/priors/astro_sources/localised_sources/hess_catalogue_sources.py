@@ -161,9 +161,8 @@ class construct_hess_source_map_interpolation(object):
 
         self.binning_geometry = binning_geometry
 
+        log_astro_sourcemap = np.log(construct_hess_flux_matrix(binning_geometry=self.binning_geometry,).to(hess_flux_units).value)
 
-        log_astro_sourcemap = np.log(
-            construct_hess_flux_matrix(binning_geometry=self.binning_geometry,).to(hess_flux_units).value)
 
 
         # Have to interpolate actual probabilities as otherwise these maps include -inf
@@ -232,6 +231,8 @@ class HESSCatalogueSources_Prior(SourceFluxDiscreteLogPrior):
 
 
         self._create_geometry(axes=axes, binning_geometry=binning_geometry)
+
+
 
 
         self.log_hess_class_instance = construct_hess_source_map_interpolation(binning_geometry=self.binning_geometry,)
