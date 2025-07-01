@@ -387,7 +387,7 @@ class DiscreteBruteScan(object):
         nans =  0
 
         if self.log_prior_matrix_list is None:
-            logging.info("log_prior_matrix_list does not exist. Constructing priors.")
+            print("log_prior_matrix_list does not exist. Constructing priors.")
             log_prior_matrix_list =     []
 
             for _prior_idx, log_prior in tqdm(enumerate(self.log_priors), 
@@ -408,6 +408,7 @@ class DiscreteBruteScan(object):
 
                 if log_prior.efficient_exist:
 
+                    print(f"\nEfficient prior construction for prior {_prior_idx} exists\n")
                     log_prior_matrices = np.squeeze(
                         log_prior.construct_prior_array(
                             spectral_parameters = prior_spectral_params,
@@ -425,7 +426,7 @@ class DiscreteBruteScan(object):
                     nans+=np.sum(np.isnan(log_prior_matrices))
 
                 else:
-
+                    print(f"\nInefficient prior construction for prior {_prior_idx} used\n")
                     # If the prior does not have the mesh inefficient function, that allows
                         # Easy construction of the prior matrices, then each matrix for each 
                         # combination of the hyperparameter values is calculated one-by-one
@@ -441,6 +442,8 @@ class DiscreteBruteScan(object):
                 # Making sure the output is a numpy array
                 log_prior_matrices = np.asarray(log_prior_matrices, dtype=float)
 
+
+                print(_prior_idx, log_prior_matrices.shape, prior_marged_shapes[_prior_idx])
                 log_prior_matrix_list.append(log_prior_matrices)
 
             logging.debug(f"Total cumulative number of nan values within all prior matrices: {nans}")

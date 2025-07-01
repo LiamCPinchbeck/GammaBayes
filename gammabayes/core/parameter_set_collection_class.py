@@ -314,7 +314,7 @@ f"""{param['_internal_name']} is not discrete. Prior parameters are presumed to 
 
         return u
     
-    def logpdf(self, input):
+    def logpdf(self, input_vals):
         """
         Computes the log of the probability density function (logPDF) for the given input.
 
@@ -325,10 +325,10 @@ f"""{param['_internal_name']} is not discrete. Prior parameters are presumed to 
             float: The computed logPDF value.
         """
 
-        output = np.zeros_like(input)
+        output = np.zeros_like(input_vals)
 
         for parameter, input_indices in self.unique_parameter_list:
-            output[input_indices] = parameter.logpdf(input[input_indices])
+            output[input_indices] = parameter.logpdf(input_vals[input_indices])
         
 
 
