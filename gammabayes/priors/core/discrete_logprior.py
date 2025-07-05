@@ -1,12 +1,9 @@
-from scipy.special import logsumexp
-import numpy as np, time, warnings, logging, pickle
-from gammabayes.samplers import  integral_inverse_transform_sampler
-from gammabayes.utils import iterate_logspace_integration, construct_log_dx_mesh
-from gammabayes import update_with_defaults, GammaObs, GammaBinning, GammaLogExposure
-# from gammabayes import EventData
-from icecream import ic
-from astropy import units as u
-import matplotlib.pyplot as plt
+import torch
+import pyro
+import pyro.distributions as dist
+from torch.distributions import constraints
+from torch.distributions import Categorical
+
 
 class DiscreteLogPrior:
     arg_constraints = {}
