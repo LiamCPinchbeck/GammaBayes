@@ -6,8 +6,8 @@ from astropy.coordinates import SkyCoord
 from gammapy.maps import Map, MapAxis, MapAxes, WcsGeom
 import os, zipfile, time, numpy as np, importlib.resources as pkg_resources
 
-from ..CTAO_IRFs.CTAO_irf_file_utils import find_ctao_irf_file_path
-from ..HESS_IRFs import extract_and_generate_hess_data
+from gammabayes.response_functions.instrument_specific_interfaces.CTAO_IRFs.CTAO_irf_file_utils import find_ctao_irf_file_path
+from gammabayes.response_functions.instrument_specific_interfaces.HESS_IRFs import extract_and_generate_hess_data
 from gammapy.data import DataStore
 
 
