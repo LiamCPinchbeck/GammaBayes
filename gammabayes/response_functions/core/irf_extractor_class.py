@@ -1,10 +1,17 @@
+from gammabayes import haversine, resources_dir
 from astropy import units as u
 from astropy.units import Quantity
 from gammapy.irf import load_irf_dict_from_file
-import os
-import zipfile
+from astropy.coordinates import SkyCoord
+from gammapy.maps import Map, MapAxis, MapAxes, WcsGeom
+import os, zipfile, time, numpy as np, importlib.resources as pkg_resources
+
+from ..CTAO_IRFs.CTAO_irf_file_utils import find_ctao_irf_file_path
+from ..HESS_IRFs import extract_and_generate_hess_data
+from gammapy.data import DataStore
+
+
 import torch
-from gammabayes import haversine
 
 
 class IRFExtractor(object):
@@ -34,8 +41,17 @@ class IRFExtractor(object):
         else:
             irf_time_in_seconds = 180000
 
+        if self.file_path is None:
+            # self.file_path = resources_dir+f'/irf_fits_files/Prod5-South-20deg-AverageAz-14MSTs37SSTs.{irf_time_in_seconds}s-v0.1.fits'
 
-        self.extracted_default_irfs  = load_irf_dict_from_file(self.file_path)
+            if self.instrument in ['CTA', 'CTAO']:
+                self._CTAO_init(zenith_angle=zenith_angle, hemisphere=hemisphere, prod_vers=prod_vers)
+            else:
+                self._HESS_init(pointing_dir=pointing_dir, obs_id=obs_id)
+
+
+        else:
+            self.extracted_default_irfs  = load_irf_dict_from_file(self.file_path)
 
 
         self.psf_units = psf_units

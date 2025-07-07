@@ -1,5 +1,7 @@
 ![Alt text](https://raw.githubusercontent.com/lpin0002/GammaBayes/main/misc/banner_logo_v2.png)
 
+__CODE CURRENTLY NOT IN OPERATIONAL STATE__
+In the middle of a large code refactor and slowly integrating custom code that is not compatible with most of GammaBayes. If you still want to use GammaBayes I would recommend the use of the main branch (stable) or possibly developer branch (more stable than this branch).
 
 __Author(s)__: Liam Pinchbeck (Liam.Pinchbeck@monash.edu)
 
