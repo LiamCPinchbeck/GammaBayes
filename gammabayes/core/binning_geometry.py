@@ -48,6 +48,9 @@ class GammaBinning:
         self.lat_axis = 0.5*(self.lat_edges[1:]+self.lat_edges[:-1])
 
 
+        self.spatial_centre = torch.tensor([(lon_max+lon_min)/2, (lat_max+lat_min)/2])
+
+
 
 
     @property
@@ -129,4 +132,11 @@ class GammaBinning:
     @property
     def spatial_axes(self):
         return [self.lon_axis, self.lat_axis]
+
+
+    @property
+    def shape(self):
+        return self.axes_dim
+
+
     
