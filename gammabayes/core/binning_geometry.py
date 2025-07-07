@@ -116,11 +116,11 @@ class GammaBinning:
 
     @property
     def axes(self):
-        return [self.energy_axis, self.lon_axis, self.lat_axis]
+        return (self.energy_axis, self.lon_axis, self.lat_axis)
 
     @property
     def axes_mesh(self):
-        return torch.meshgrid(self.energy_axis, self.lon_axis, self.lat_axis, indexing='ij')
+        return torch.stack((*torch.meshgrid(self.energy_axis, self.lon_axis, self.lat_axis, indexing='ij'),), dim=-1)
 
     @property
     def axes_dim(self):
