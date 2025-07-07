@@ -1,6 +1,5 @@
 import numpy as np
 from gammabayes import GammaBinning, ParameterSet
-from gammabayes.likelihoods.irfs import IRF_LogLikelihood
 from gammabayes.utils.integration import iterate_logspace_integration
 from tqdm import tqdm
 from astropy import units as u
@@ -15,7 +14,7 @@ class FOV_IRF_Norm:
                  original_norm_matrix_pointing_dir: np.ndarray[u.Quantity],
                  new_pointing: np.ndarray[u.Quantity],
                  pointing_dirs: list[np.ndarray[u.Quantity]]|tuple[np.ndarray[u.Quantity]]=None, observation_time:u.Quantity=None,
-                 irf_loglike:IRF_LogLikelihood=None, 
+                 irf_loglike=None, 
                  log_edisp_norm_matrix:np.ndarray=None,
                  log_psf_norm_matrix:np.ndarray=None,
                  irf_norm_matrix:np.ndarray=None,

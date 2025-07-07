@@ -1,5 +1,66 @@
 from .parameter_set_class import ParameterSet
-import logging, warnings, numpy as np
+import logging, warnings, numpy as np, yaml, sys, os, torch
+from scipy import integrate, special, interpolate, stats
+import random, time, pickle
+from tqdm import tqdm
+from scipy.stats import norm as norm1d
+from scipy.interpolate import RegularGridInterpolator
+from astropy import units as u
+from astropy.units import Quantity
+from os import path
+resources_dir = path.join(path.dirname(__file__), '../package_data')
+
+
+def update_with_defaults(target_dict, default_dict):
+    """
+    Updates the target dictionary in place, adding missing keys from the default dictionary.
+
+    Args:
+        target_dict (dict): The dictionary to be updated.
+        default_dict (dict): The dictionary containing default values.
+    """
+    for key, value in default_dict.items():
+        target_dict.setdefault(key, value)
+
+
+def haversine(lon1, lat1, lon2, lat2):
+        # Convert degrees to radians
+    lon1_rad = torch.deg2rad(lon1)
+    lat1_rad = torch.deg2rad(lat1)
+    lon2_rad = torch.deg2rad(lon2)
+    lat2_rad = torch.deg2rad(lat2)
+
+    # Differences in coordinates
+    dlat = lat2_rad - lat1_rad
+    dlon = lon2_rad - lon1_rad
+
+    # Haversine formula components
+    a = torch.sin(dlat / 2.0)**2 + torch.cos(lat1_rad) * torch.cos(lat2_rad) * torch.sin(dlon / 2.0)**2
+    
+    # Clamp 'a' to a valid range [0, 1] to prevent numerical issues with sqrt for very small
+    # negative values that might occur due to floating point inaccuracies.
+    a = torch.clamp(a, 0.0, 1.0)
+
+    # Angular distance 'c' (central angle in radians)
+    c = 2.0 * torch.atan2(torch.sqrt(a), torch.sqrt(1.0 - a))
+
+    return torch.rad2deg(c)
+
+def power_law(energy: float|Quantity, index: float, phi0: int|Quantity =1) -> float|Quantity:
+    """
+    Evaluates a power law function.
+
+    Args:
+        energy (float | Quantity): Energy values.
+        index (float): Power law index.
+        phi0 (int | Quantity, optional): Normalization constant. Defaults to 1.
+
+    Returns:
+        float | Quantity: Computed power law values.
+    """
+    warnings.warn("power_law will be deprecated after version 0.1.16. Please use the provided function in the prior.spectral components module.")
+    return phi0*energy**(index)
+
 
 def _handle_parameter_specification(
         parameter_specifications: dict | ParameterSet,
@@ -94,18 +155,43 @@ def _handle_nuisance_axes(nuisance_axes: list[np.ndarray],
     return nuisance_axes
 
 
-def pick_5_values(lst):
-    if len(lst) < 5:
-        raise ValueError("List must have at least 5 elements")
-    
-    # Calculate indices for the edges, center, and intermediate values
-    first_idx = 0
-    last_idx = len(lst) - 1
-    center_idx = len(lst) // 2
-    mid1_idx = (first_idx + center_idx) // 2
-    mid2_idx = (center_idx + last_idx) // 2
 
-    # Extract the values
-    values = [lst[first_idx], lst[mid1_idx], lst[center_idx], lst[mid2_idx], lst[last_idx]]
-    
-    return values
+
+
+
+def save_to_pickle(filename, object_to_save, write_mode='wb'):
+    """
+    Saves an object to a file using pickle with a specified write mode.
+
+    Args:
+        filename (str): The name of the file to save the object.
+        object_to_save (object): The object to be saved.
+        write_mode (str, optional): The mode in which the file is opened. Defaults to 'wb'.
+    """
+    with open(filename, write_mode) as file:
+        pickle.dump(object_to_save, file)
+
+
+def load_pickle(filename, load_mode='rb'):
+    """
+    Loads an object from a pickle file with a specified load mode.
+
+    Args:
+        filename (str): The name of the file to load the object from.
+        load_mode (str, optional): The mode in which the file is opened. Defaults to 'rb'.
+
+    Returns:
+        object: The loaded object.
+    """
+    with open(filename, load_mode) as file:
+        loaded_object = pickle.load(file)
+
+    return loaded_object
+
+
+
+
+
+
+
+

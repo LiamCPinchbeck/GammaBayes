@@ -1,5 +1,5 @@
 from .discrete_logprior import DiscreteLogPrior
-
+import torch
 
 class StaticDistTemplate(DiscreteLogPrior):
 

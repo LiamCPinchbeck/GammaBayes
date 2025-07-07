@@ -22,11 +22,11 @@ setup(name='GammaBayes',
       python_requires='>=3.6, <=3.12.7',
       install_requires=[
         "astropy==5.3.4",
-        "corner==2.2.2",
+        "corner",
         "dynesty==2.1.2",
-        "tqdm==4.66.1",
+        "tqdm",
         "gammapy==1.2",
-        "pandas==2.1.2",
+        "pandas",
         "pytest==7.4.0",
         "h5py==3.10.0",
         "icecream==2.1.3",
@@ -54,20 +54,4 @@ setup(name='GammaBayes',
                         'utils/cli/*'
                         ]
       },
-      entry_points={
-          'console_scripts':[
-            'GammaBayes = gammabayes.utils.cli.intro:CLI_Intro',
-            'gammabayes = gammabayes.utils.cli.intro:CLI_Intro',
-            'gammabayes.slurm.run_initial_setup = gammabayes.utils.cli.slurm:initial_setup',
-            'gammabayes.slurm.run_simulate = gammabayes.utils.cli:run_sim',
-            'gammabayes.slurm.run_analysis_setup = gammabayes.utils.cli.slurm:analysis_setup',
-            'gammabayes.slurm.run_marg = gammabayes.utils.cli:run_marg',
-            'gammabayes.slurm.run_combine = gammabayes.utils.cli:run_combine',
-            'gammabayes.run_simulate = gammabayes.utils.cli:run_sim',
-            'gammabayes.run_marg = gammabayes.utils.cli:run_marg',
-            'gammabayes.run_combine = gammabayes.utils.cli:run_combine',
-            'gammabayes.plot_from_save = gammabayes.utils.cli:plot_from_save',
-            ]
-      },
-
       )
