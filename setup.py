@@ -13,7 +13,7 @@ setup(name='GammaBayes',
       author='Liam Pinchbeck',
       author_email='Liam.Pinchbeck@monash.edu',
       license="MIT",
-      version='0.2.0',
+      version='2.0.0',
 
       packages=find_packages(),
         long_description=long_description,  # This is the long description, read from README.md

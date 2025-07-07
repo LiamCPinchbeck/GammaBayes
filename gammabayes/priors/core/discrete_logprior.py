@@ -10,7 +10,7 @@ class DiscreteLogPrior:
     support = constraints.real
     has_enumerate_support = False
 
-    def __init__(self, coord_geom, rate_tensor_func=None, rate_tensor_logfunc=None):
+    def __init__(self, coord_geom, rate_tensor_func=None, name=None, rate_tensor_logfunc=None):
         """
         energy_edges: assumed to be in linear space, log10 spacing is applied internally. Presumes that 
         the inputs are either linearly spaced or have the appropriate jacobian applied.
@@ -30,8 +30,27 @@ class DiscreteLogPrior:
             raise ValueError("Either 'rate_tensor_func' or 'rate_tensor_logfunc' must be given.")
 
 
+        self.name = name
         self._cached_probs = None
         self._cached_params = None
+
+    def __repr__(self) -> str:
+        """
+        String representation of the DiscreteLogPrior instance.
+
+        Returns:
+            str: A description of the instance including its name, logfunction type, input units, and axes names.
+        """
+        description = f"Discrete log prior class\n{'-' * 20}\n" \
+                      f"Name: {self.name}\n" \
+                      f"Logfunction type: {type(self.log_rate).__name__}\n"
+        return description
+
+
+    def __call__(self, *args, **kwargs):
+
+        output = self.log_rate(*args, **kwargs)
+        return output
 
 
     def _evaluate(self, **params):
@@ -99,3 +118,14 @@ class DiscreteLogPrior:
 
     def _exp_log_rate(self, *args, **kwargs):
         return torch.exp(self.log_rate(*args, **kwargs))
+
+
+    def log_normalisation(self, log_prior_values, parameters={}, *args, **kwargs):
+        if (log_prior_values is []) | (log_prior_values is None):
+            log_dist_values = self.eval_log_on_geom(**parameters)
+
+        # Annoying PyTorch Error where if you specify None as in the documentation it raises an error
+            # This ensure that all the axes are reduced, regardless of dimension
+        dims = tuple(torch.arange(log_dist_values.ndim).numpy())
+
+        return torch.logsumexp(log_dist_values, dim=dims)
