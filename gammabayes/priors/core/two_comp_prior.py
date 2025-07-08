@@ -15,11 +15,11 @@ class TwoCompFluxPrior(SourceFluxDiscreteLogPrior):
                  ):
 
 
-        self.spectral_comp    = spectral_class
-        self.spatial_comp     = spatial_class
+        self.spectral_comp    = spectral_comp
+        self.spatial_comp     = spatial_comp
 
         super().__init__(
-            log_rate_source_function = self.log_flux_function, 
+            log_flux_function = self.log_flux_function, 
             *args, **kwargs
             )
             
@@ -32,8 +32,8 @@ class TwoCompFluxPrior(SourceFluxDiscreteLogPrior):
         # Extracting the unique spatial values
         spatial_vals = grid[0, ..., 1:]
 
-        energy_comp_vals    = self.spectral_comp(energy_vals, spectral_params=spectral_params)
-        spatial_comp_vals   = self.spatial_comp(spatial_vals, spatial_params=spatial_params)
+        energy_comp_vals    = self.spectral_comp(energy_vals, **spectral_params)
+        spatial_comp_vals   = self.spatial_comp(spatial_vals, **spatial_params)
 
         output_mat = energy_comp_vals[:, None, None] + spatial_comp_vals[None, :, :]
 

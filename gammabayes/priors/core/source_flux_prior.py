@@ -32,9 +32,9 @@ class SourceFluxDiscreteLogPrior(DiscreteLogPrior):
         self.irf_loglike = irf_loglike
         
         if binning_geometry is None:
-            if hasattar(irf_loglike, "binning_geometry"):
+            if hasattr(irf_loglike, "binning_geometry"):
                 self.binning_geometry = self.irf_loglike.binning_geometry
-            elif hasattar(log_exposure_map, "binning_geometry"):
+            elif hasattr(log_exposure_map, "binning_geometry"):
                 self.binning_geometry = log_exposure_map.binning_geometry
             else:
                 raise ValueError("Binning geometry not given and cannot be extracted from other inputs")

@@ -9,17 +9,10 @@ from icecream import ic
 class IsotropicSpatial_PriorComp(BaseSpatial_PriorComp):
 
     @staticmethod
-    def iso_logfunc(lon, lat, *args, **kwargs):
-        return lon.value*0
+    def iso_logfunc(lonlatgrid, *args, **kwargs):
+        return lonlatgrid[..., 0]*0
     
-    @staticmethod
-    def iso_meshlogfunc(lon, lat, *args, **kwargs):
-
-        zero_output = np.zeros(shape=(len(lon), len(lat)))
-
-        return zero_output
     
-    def __init__(self, default_parameter_values=None, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
 
-        super().__init__(logfunc=self.iso_logfunc, 
-                         default_parameter_values=default_parameter_values, *args, **kwargs)
+        super().__init__(logfunc=self.iso_logfunc, *args, **kwargs)

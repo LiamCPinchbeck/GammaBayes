@@ -1,131 +1,91 @@
 from .base_spectral_comp import BaseSpectral_PriorComp
-from astropy import units as u
-import numpy as np
-
-from icecream import ic
+import torch
+from functools import partial
 
 
-def log_power_law(self, energy: float|u.Quantity, index: float=2.5, phi0: int|u.Quantity =None) -> float|u.Quantity:
-    """
-    Evaluates a power law function.
 
-    Args:
-        energy (float | Quantity): Energy values.
-        index (float): Power law index. Defaults to 2.5 .
-        phi0 (int | Quantity, optional): Normalization constant. Defaults to 1.
-
-    Returns:
-        float | Quantity: Computed power law values.
-    """
-    if phi0 is None:
-        phi0 = self.default_parameter_values['phi0']
-    if index is None:
-        index = self.default_parameter_values['index']
-
-    log_value = np.log(phi0) - index * np.log(energy.to(self.energy_units).value)
-
-    return log_value
 
 class PowerLaw(BaseSpectral_PriorComp):
 
-    log_power_law = log_power_law
+    @staticmethod
+    def log_power_law(energy, ref_energy, index, phi0):
 
-    def __init__(self, default_parameter_values=None, energy_units=u.Unit("TeV"), *args, **kwargs):
-        
-        if default_parameter_values is None:
-            default_parameter_values = {'index':2.5, "phi0": 1e-8}
+        log_value = torch.log(phi0) - index * torch.log(energy/ref_energy)
 
-        self.energy_units = energy_units
+        return log_value
 
-        super().__init__(logfunc=self.log_power_law, default_parameter_values=default_parameter_values)
-
-
-
-# Defined outside of class for multiprocessing
-# TODO: TechDebt
-def log_broken_power_law(self, energy: float|u.Quantity, index: float=2.5, cutoff_energy_TeV:float=1, phi0: int|u.Quantity =None) -> float|u.Quantity:
-    """
-    Evaluates a broken power law function. 
-
-    $\phi_0 \left(\frac{E}{1\, TeV}\right)^{-index} \; e^{-E/cutoff\_energy\_TeV}$
-
-    Args:
-        energy (float | Quantity): Energy values.
-        index (float): Power law index. Defaults to 2.5
-        cutoff_energy_TeV (float): Cut off energy in TeV. Defaults to 1 (1 TeV)
-        phi0 (int | Quantity, optional): Normalization constant. Defaults to 1.
+    def __init__(self, ref_energy=torch.tensor(1.), index=torch.tensor(2.5), phi0=torch.tensor(1e-13), *args, **kwargs):
         
 
-    Returns:
-        float | Quantity: Computed power law values.
-    """
-    if phi0 is None:
-        phi0 = self.default_parameter_values['phi0']
-    if index is None:
-        index = self.default_parameter_values['index']
-    if cutoff_energy_TeV is None:
-        cutoff_energy_TeV = self.default_parameter_values['cutoff_energy_TeV']
+        self.__logfunc = partial(self.log_power_law, ref_energy=ref_energy, index=index, phi0=phi0)
 
-    log_value =  np.log(phi0) - index*np.log(energy.to("TeV").value) - energy.to("TeV").value/cutoff_energy_TeV
+        super().__init__(logfunc=self.__logfunc)
 
-    return log_value
+
+
+
+class ExpCutoffPowerLaw(BaseSpectral_PriorComp):
+
+    @staticmethod
+    def log_exp_cutoff_power_law(energy, index, ref_energy, lambdaval, phi0):
+
+        log_value =  torch.log(phi0) - index*torch.log(energy/ref_energy) - lambdaval*energy
+
+        return log_value
+
+    def __init__(self, 
+                index=torch.tensor(2.5), 
+                ref_energy=torch.tensor(1.), lambdaval=torch.tensor(1/100.), 
+                phi0=torch.tensor(1e-13), *args, **kwargs):
+
+        self.__log_exp_cutoff_power_law = partial(self.log_exp_cutoff_power_law, ref_energy=ref_energy, index=index, phi0=phi0, lambdaval=lambdaval)
+
+        super().__init__(logfunc=self.__log_exp_cutoff_power_law)
 
 
 class BrokenPowerLaw(BaseSpectral_PriorComp):
 
-    log_broken_power_law = log_broken_power_law
+    @staticmethod
+    def log_broken_power_law(energy, index1, index2, break_energy, phi0):
 
-    def __init__(self, default_parameter_values=None, energy_units=u.Unit("TeV"), *args, **kwargs):
-        if default_parameter_values is None:
-            default_parameter_values = {'index':2.5,"cutoff_energy_TeV":1, "phi0": 1e-8, }
+        log_value1 =  torch.log(phi0) - index1*torch.log(energy/break_energy) 
+        log_value2 =  torch.log(phi0) - index2*torch.log(energy/break_energy) 
 
-        super().__init__(logfunc=self.log_broken_power_law, default_parameter_values=default_parameter_values)
+        log_value = torch.where(energy>break_energy, log_value2, log_value1)
+
+        return log_value
 
 
-# Influenced by model in https://arxiv.org/pdf/astro-ph/0607333
-def log_broad_broken_power_law(self, energy: float|u.Quantity, cutoff_energy_TeV:float=10,
-                               index1: float=2.5, index2:float=3.3, S:float=0.3,
-                               phi0: int|u.Quantity =None) -> float|u.Quantity:
-    """
-    Evaluates a broken power law function. 
+    def __init__(self, 
+                index1=torch.tensor(2.), index2=torch.tensor(3.), 
+                break_energy=torch.tensor(10.), 
+                phi0=torch.tensor(1e-13), *args, **kwargs):
 
-    $\frac{dN}{dE} = \Phi_0 (E/E_c)^{-\Gamma_1} \left( 1 + \left(E/E_c\right)^{1/S}\right)^{S(\Gamma_1-\Gamma_2)}$
+        self.__log_broken_power_law = partial(self.log_broken_power_law, index1=index1, index2=index2, phi0=phi0, break_energy=break_energy)
 
-    Args:
-        energy (float | Quantity): Energy values.
-        index1 (float): Power law index before break. Defaults to 2.5
-        index2 (float): Power law index after break. Defaults to 1
-        S (float): Width of the transition region. Defaults to 0.3.
-        cutoff_energy_TeV (float): Cut off energy in TeV. Defaults to 10 (10 TeV)
-        phi0 (int | Quantity, optional): Normalization constant. Defaults to 1.
-        
-
-    Returns:
-        float | Quantity: Computed power law values.
-    """
-    if phi0 is None:
-        phi0 = self.default_parameter_values['phi0']
-    if S is None:
-        S = self.default_parameter_values['S']
-    if index1 is None:
-        index1 = self.default_parameter_values['index1']
-    if index2 is None:
-        index2 = self.default_parameter_values['index2']
-    if cutoff_energy_TeV is None:
-        cutoff_energy_TeV = self.default_parameter_values['cutoff_energy_TeV']
-
-    log_value =  np.log(phi0) - index*np.log(energy.value/cutoff_energy_TeV) + S*(index1-index2)*np.log(1+(energy.value/cutoff_energy_TeV)**(1/S))
-
-    return log_value
-
+        super().__init__(logfunc=self.__log_broken_power_law)
 
 
 class BroadBrokenPowerLaw(BaseSpectral_PriorComp):
 
-    log_broad_broken_power_law = log_broad_broken_power_law
+    # Influenced by model in https://arxiv.org/pdf/astro-ph/0607333
+    @staticmethod
+    def log_broad_broken_power_law(energy, ref_energy, cutoff_energy_TeV,
+                                            index1, index2, S, phi0):
 
-    def __init__(self, default_parameter_values=None, energy_units=u.Unit("TeV"), *args, **kwargs):
-        if default_parameter_values is None:
-            default_parameter_values = {'index1':2.5,'index2':2.5,"S":0.3, "cutoff_energy_TeV":10, "phi0": 1e-8, }
+        log_value =  torch.log(phi0) - index*torch.log(energy.value/cutoff_energy_TeV) + S*(index1-index2)*torch.log(1+(energy.value/cutoff_energy_TeV)**(1/S))
 
-        super().__init__(logfunc=self.log_broad_broken_power_law, default_parameter_values=default_parameter_values)
+        return log_value
+
+    def __init__(self, ref_energy=torch.tensor(1.), cutoff_energy_TeV=torch.tensor(10.),
+                        index1=torch.tensor(2.), index2=torch.tensor(3.), 
+                        S=torch.tensor(0.3), phi0=torch.tensor(1e-12), 
+                        *args, **kwargs):
+
+
+
+        self.__log_broad_broken_power_law = partial(self.log_broad_broken_power_law, 
+                                            ref_energy=ref_energy, cutoff_energy_TeV=cutoff_energy_TeV,
+                                            index1=index1, index2=index2, S=S, phi0=phi0)
+
+        super().__init__(logfunc=self.__log_broad_broken_power_law)
