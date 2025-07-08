@@ -1,3 +1,3 @@
-from .diffuse_emission import construct_fermi_gaggero_flux_matrix, construct_log_fermi_gaggero_bkg, FermiGaggeroDiffusePrior, extract_galprop_prior_template
+from .diffuse_emission import FermiGaggeroDiffusePrior, extract_galprop_prior_template #construct_fermi_gaggero_flux_matrix, construct_log_fermi_gaggero_bkg
 from .localised_sources import construct_hess_flux_matrix, construct_hess_source_map_interpolation, HESSCatalogueSources_Prior
 from .isotropic_emission import IsotropicPowerLaw, IsotropicBrokenPowerLaw

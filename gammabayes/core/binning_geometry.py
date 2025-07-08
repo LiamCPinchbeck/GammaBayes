@@ -50,6 +50,26 @@ class GammaBinning:
 
         self.spatial_centre = torch.tensor([(lon_max+lon_min)/2, (lat_max+lat_min)/2])
 
+        self.bin_width_mat = self._construct_bin_widths()
+
+        self.axes = (self.energy_axis, self.lon_axis, self.lat_axis)
+        self.axes_edges = (self.energy_edges, self.lon_edges, self.lat_edges)
+
+
+
+
+
+        
+    def _construct_bin_widths(self):
+        self.energy_bin_widths = self.energy_edges[1:] - self.energy_edges[:-1]
+        self.lon_bin_widths = self.lon_edges[1:]-self.lon_edges[:-1]
+        self.lat_bin_widths = self.lat_edges[1:]-self.lat_edges[:-1]
+
+
+        bin_matrix = self.energy_bin_widths[:, None, None]*self.lon_bin_widths[None, :, None]*self.lat_bin_widths[None, None, :]
+
+        return bin_matrix
+
 
 
 
@@ -117,13 +137,11 @@ class GammaBinning:
         return torch.tensor(indices, dtype=torch.long, device=values.device)
 
 
-    @property
-    def axes(self):
-        return (self.energy_axis, self.lon_axis, self.lat_axis)
+
 
     @property
     def axes_mesh(self):
-        return torch.stack((*torch.meshgrid(self.energy_axis, self.lon_axis, self.lat_axis, indexing='ij'),), dim=-1)
+        return torch.stack((*torch.meshgrid(self.energy_axis, self.lon_axis, self.lat_axis, indexing='ij'),), dim=0)
 
     @property
     def axes_dim(self):
@@ -137,6 +155,9 @@ class GammaBinning:
     @property
     def shape(self):
         return self.axes_dim
+
+
+    
 
 
     

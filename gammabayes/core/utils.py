@@ -46,20 +46,20 @@ def haversine(lon1, lat1, lon2, lat2):
 
     return torch.rad2deg(c)
 
-def power_law(energy: float|Quantity, index: float, phi0: int|Quantity =1) -> float|Quantity:
-    """
-    Evaluates a power law function.
+# def power_law(energy: float|Quantity, index: float, phi0: int|Quantity =1) -> float|Quantity:
+#     """
+#     Evaluates a power law function.
 
-    Args:
-        energy (float | Quantity): Energy values.
-        index (float): Power law index.
-        phi0 (int | Quantity, optional): Normalization constant. Defaults to 1.
+#     Args:
+#         energy (float | Quantity): Energy values.
+#         index (float): Power law index.
+#         phi0 (int | Quantity, optional): Normalization constant. Defaults to 1.
 
-    Returns:
-        float | Quantity: Computed power law values.
-    """
-    warnings.warn("power_law will be deprecated after version 0.1.16. Please use the provided function in the prior.spectral components module.")
-    return phi0*energy**(index)
+#     Returns:
+#         float | Quantity: Computed power law values.
+#     """
+#     warnings.warn("power_law will be deprecated after version 0.1.16. Please use the provided function in the prior.spectral components module.")
+#     return phi0*energy**(index)
 
 
 def _handle_parameter_specification(

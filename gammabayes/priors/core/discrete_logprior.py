@@ -10,12 +10,12 @@ class DiscreteLogPrior:
     support = constraints.real
     has_enumerate_support = False
 
-    def __init__(self, coord_geom, rate_tensor_func=None, name=None, rate_tensor_logfunc=None):
+    def __init__(self, binning_geometry, rate_tensor_func=None, name=None, rate_tensor_logfunc=None):
         """
         energy_edges: assumed to be in linear space, log10 spacing is applied internally. Presumes that 
         the inputs are either linearly spaced or have the appropriate jacobian applied.
         """
-        self.coord_geom = coord_geom
+        self.binning_geometry = binning_geometry
         if rate_tensor_logfunc is not None:
             self.log_rate = rate_tensor_logfunc
         else:
@@ -33,6 +33,7 @@ class DiscreteLogPrior:
         self.name = name
         self._cached_probs = None
         self._cached_params = None
+
 
     def __repr__(self) -> str:
         """
@@ -60,7 +61,7 @@ class DiscreteLogPrior:
             rates = self._cached_rates
             norm  = self._cached_norm
         else:
-            rates = self.rate_tensor_func(self.coord_geom.grid, **params).float()
+            rates = self.rate_tensor_func(self.binning_geometry.grid, **params).float()
             norm = rates.sum()
             self._cached_rates  = rates
             self._cached_norm   = norm
@@ -85,20 +86,30 @@ class DiscreteLogPrior:
 
     def sample(self, norm, normalise=False, **params):
 
-        rates = norm*torch.exp(self.eval_log_on_geom(**params))
+        rates = torch.exp(self.eval_log_on_geom(**params))
         
         if normalise:
             rates/=rates.sum()
 
-        poiss_dist = dist.Poisson(rate=rates)
+        poiss_dist = dist.Poisson(rate=norm*rates)
 
         samples = poiss_dist.sample()
 
         return samples
 
+    def sample_categorical(self, num_samples, **params):
+        categorical_dist = self._get_categorical(**params)
+        categorical_dist_samples_indices = torch.unravel_index(categorical_dist.sample((num_samples,)), shape=self.binning_geometry.shape)
+        categorical_dist_samples = torch.stack([axis[samples] for axis, samples in zip(self.binning_geometry.axes, categorical_dist_samples_indices)], dim=1)
+
+
+        categorical_dist_samples_hist = torch.histogramdd(categorical_dist_samples, self.binning_geometry.axes_edges).hist
+
+        return categorical_dist_samples_hist
+
 
     def log_prob(self, value, **params):
-        indices = self.coord_geom.values_to_grid(value)
+        indices = self.binning_geometry.values_to_grid(value)
 
         cat = self._get_categorical(**params)
 
@@ -111,10 +122,9 @@ class DiscreteLogPrior:
 
     def eval_log_on_geom(self, **params):
         return self.log_rate(
-            self.coord_geom.shaped_grid, 
+            self.binning_geometry.shaped_grid, 
             **params
             )
-
 
     def _exp_log_rate(self, *args, **kwargs):
         return torch.exp(self.log_rate(*args, **kwargs))
@@ -129,3 +139,30 @@ class DiscreteLogPrior:
         dims = tuple(torch.arange(log_dist_values.ndim).numpy())
 
         return torch.logsumexp(log_dist_values, dim=dims)
+
+
+    def peek(self, pcm_kwargs={}, **params):
+        from matplotlib import pyplot as plt
+
+        full_mat = self.eval_log_on_geom(**params)
+
+        fig, axes = plt.subplots(1, 2, figsize=(18, 5))
+
+        axes[0].plot(self.binning_geometry.energy_axis, torch.logsumexp(full_mat, dim=(1,2)))
+        axes[0].set(
+            xlabel="True Energy [TeV]",
+            xscale='log',
+            yscale='log'
+        )
+
+        pcm = axes[1].pcolormesh(*self.binning_geometry.spatial_axes, torch.logsumexp(full_mat, dim=0).T, **pcm_kwargs)
+
+        plt.colorbar(pcm, ax=axes[1])
+        axes[1].set(
+            xlabel="Galactic Longitude [deg]",
+            ylabel="Galactic Latitude [deg]",
+            aspect='equal',
+        )
+
+        return fig, axes
+

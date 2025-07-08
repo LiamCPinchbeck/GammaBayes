@@ -1,5 +1,5 @@
 from .parameter_class import Parameter
-# from .data_class import EventData
+from .reg_interpolator import RegularTorchInterpolator
 from .binning_geometry import GammaBinning
 from .gamma_cube import GammaObs, GammaObsCube
 from .exposure import GammaLogExposure
