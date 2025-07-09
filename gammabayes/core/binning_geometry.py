@@ -14,11 +14,11 @@ class GammaBinning:
         energy_min = torch.tensor(energy_min)
         energy_max = torch.tensor(energy_max)
 
-        lon_res = torch.tensor(lon_res)
+        self.lon_res = torch.tensor(lon_res)
         lon_min = torch.tensor(lon_min)
         lon_max = torch.tensor(lon_max)
 
-        lat_res = torch.tensor(lat_res)
+        self.lat_res = torch.tensor(lat_res)
         lat_min = torch.tensor(lat_min)
         lat_max = torch.tensor(lat_max)
 
@@ -27,8 +27,8 @@ class GammaBinning:
         log10_E_max = torch.log10(energy_max)
         self.num_energy_bins = int((log10_E_max-log10_E_min)*energy_res+1)
 
-        self.num_lon_bins = int((lon_max-lon_min)*lon_res+1)
-        self.num_lat_bins = int((lat_max-lat_min)*lat_res+1)
+        self.num_lon_bins = int((lon_max-lon_min)*self.lon_res+1)
+        self.num_lat_bins = int((lat_max-lat_min)*self.lat_res+1)
 
 
         self.energy_edges = 10**torch.linspace(log10_E_min, log10_E_max, self.num_energy_bins)
