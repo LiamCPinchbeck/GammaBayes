@@ -1,3 +1,3 @@
-from .base_spatial_comp import BaseSpatial_PriorComp
+from .base_spatial_comp import BaseSpatial_PriorComp, PointSpatial_PriorComp
 from .isotropic_map import IsotropicSpatial_PriorComp
 from .gaussian_comp import GaussianSpatial_PriorComp

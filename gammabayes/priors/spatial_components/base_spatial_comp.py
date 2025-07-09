@@ -1,7 +1,7 @@
 from astropy import units as u
 from gammabayes.priors.core.wrappers import _wrap_if_missing_keyword
 from gammabayes import update_with_defaults
-
+from functools import partial
 
 
 class BaseSpatial_PriorComp:
@@ -19,7 +19,7 @@ class BaseSpatial_PriorComp:
 
 
 
-class PointSpatial_PriorComp:
+class PointSpatial_PriorComp(BaseSpatial_PriorComp):
 
     @staticmethod
     def log_point_mask(lonlatgrid, pos_lon, pos_lat, *args, **kwargs):
@@ -40,8 +40,7 @@ class PointSpatial_PriorComp:
                 *args, **kwargs):
 
         self.__log_point_mask = partial(self.log_point_mask,
-                                pos_lon=pos_lon, pos_lat=pos_lat, 
-                                rho=rho)
+                                pos_lon=pos_lon, pos_lat=pos_lat)
 
 
         super().__init__(logfunc=self.__log_point_mask, *args, **kwargs)
