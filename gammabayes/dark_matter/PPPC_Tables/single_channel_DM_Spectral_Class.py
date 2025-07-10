@@ -1,17 +1,13 @@
-import numpy as np
-from scipy import interpolate
 import os
-
+from gammabayes import RegularTorchInterpolation
+from gammabayes.priors.spectral_components import BaseSpectral
 single_channel_spectral_data_path = os.path.dirname(os.path.dirname(__file__))
 
-from ..PPPC_Tables import PPPCReader
-
-from gammabayes import update_with_defaults
+from .PPPCReader import PPPCReader
 
 
-class SingleDMChannel(object):
+class SingleDMChannel(BaseSpectral_PriorComp):
     """Class for efficient single channel dark matter spectra calculations."""
-
 
     
     def __init__(self, channel='W+W-',
@@ -49,8 +45,8 @@ class SingleDMChannel(object):
 
 
 
-    # Yes ew
-    loglog10 = torch.log(torch.log(torch.tensor(10.)))
+        # Yes ew
+        self.loglog10 = torch.log(torch.log(torch.tensor(10.)))
 
 
     def __call__(self, *args, **kwargs) -> np.ndarray | float:
@@ -82,7 +78,7 @@ class SingleDMChannel(object):
         log_channel_spectrum = np.log(channel_spectrum)
 
         # Converting it from dN/dlog10x to dN/dE
-        log_channel_spectrum =log_channel_spectrum - np.log(energy) - np.log(np.log(10))
+        log_channel_spectrum =log_channel_spectrum - np.log(energy) - self.loglog10
 
         return log_channel_spectrum
 
