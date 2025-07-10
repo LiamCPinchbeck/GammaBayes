@@ -1,6 +1,6 @@
 import numpy as np
 import astropy.units as u
-from gammabayes.utils import logspace_riemann, logspace_simpson
+# from gammabayes.utils import logspace_riemann, logspace_simpson
 from gammabayes import haversine, update_with_defaults
 from scipy import special
 import time
@@ -19,7 +19,7 @@ from gammapy.astro.darkmatter.profiles import (
 
 from gammapy.utils.integrate import trapz_loglog
 
-from gammabayes.utils.integration import logspace_trapz
+# from gammabayes.utils.integration import logspace_trapz
 from icecream import ic
 
 
