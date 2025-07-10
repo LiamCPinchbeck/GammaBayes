@@ -10,7 +10,7 @@ class SingleDMChannel(BaseSpectral_PriorComp):
     """Class for efficient single channel dark matter spectra calculations."""
 
     
-    def __init__(self, channel='W+W-', mass = 1.0,):
+    def __init__(self, binning_geometry, channel='W+W-', mass = torch.tensor(1.), *args, **kwargs):
         """
         Initializes the SingleDMChannel class with specified parameters.
 
@@ -21,9 +21,9 @@ class SingleDMChannel(BaseSpectral_PriorComp):
     
         self.channel = channel
         atprod_gammas = PPPCReader(single_channel_spectral_data_path+"/PPPC_Tables/AtProduction_gamma_EW_corrections.dat")
-        atprod_mass_values = torch.tensor(atprod_gammas.mass_axis)
-        atprod_log10mass_values = torch.log10(atprod_mass_values)
-        atprod_log10x_values =torch.tensor(atprod_gammas.log10x_axis)
+        self._atprod_mass_values = torch.tensor(atprod_gammas.mass_axis)
+        self._atprod_log10mass_values = torch.log10(self._atprod_mass_values)
+        self._atprod_log10x_values =torch.tensor(atprod_gammas.log10x_axis)
 
         # We take the square root of the outputs so later we can square them to enforce positivity
         try:
@@ -39,10 +39,10 @@ class SingleDMChannel(BaseSpectral_PriorComp):
         tempspectragrid = torch.sqrt(torch.tensor(tempspectragrid))
             
         # Interpolating square root of PPPC tables to preserve positivity during interpolation (where result is squared)
-        self.sqrtchannelfunc = interpolate.RegularTorchInterpolator(
+        self.sqrtchannelfunc = RegularTorchInterpolator(
                                     (
-                                        atprod_log10mass_values, 
-                                        atprod_log10x_values
+                                        self._atprod_log10mass_values, 
+                                        self._atprod_log10x_values
                                         ), 
                                     tempspectragrid)
 
@@ -51,30 +51,18 @@ class SingleDMChannel(BaseSpectral_PriorComp):
         # Yes ew
         self.loglog10 = torch.log(torch.log(torch.tensor(10.)))
 
+        mass = torch.ones_like(binning_geometry.energy_axis)
+
         self.log_spectral_gen = partial(self.__log_spectral_gen, mass=mass)
 
+        super().__init__(
+            logfunc = self.log_spectral_gen,
 
-    def __call__(self, *args, **kwargs):
-        """
-        Allows the instance to be called as a function.
-
-        Returns:
-            tensor: The result of the log function.
-        """
-        return self.log_spectral_gen(*args, **kwargs)
+        )
 
 
+    def __log_spectral_gen(self, energy, mass):
 
-    def __log_spectral_gen(self, energy, mass=torch.tensor(1.)):
-        """
-        Generates the spectral values for the given energy and parameters.
-
-        Args:
-            energy (float | tensor | list): Energy values to calculate the spectrum for.
-
-        Returns:
-            tensor | float: The calculated log spectrum values.
-        """
         log10mass = torch.log10(mass)
 
         channel_spectrum = (self.sqrtchannelfunc((log10mass, 
@@ -84,6 +72,8 @@ class SingleDMChannel(BaseSpectral_PriorComp):
 
         # Converting it from dN/dlog10x to dN/dE
         log_channel_spectrum =log_channel_spectrum - torch.log(energy) - self.loglog10
+
+        log_channel_spectrum = torch.where(energy>mass, -50, log_channel_spectrum)
 
         return log_channel_spectrum
 

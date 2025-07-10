@@ -8,13 +8,13 @@ class BaseSpatial_PriorComp:
 
     def __init__(self, logfunc, *args, **kwargs):
 
-        self._input_logfunc = logfunc
+        self.__input_logfunc = logfunc
 
 
     def __call__(self, *args, **kwargs):
 
 
-        return self._input_logfunc(*args, **kwargs)
+        return self.__input_logfunc(*args, **kwargs)
 
 
 
