@@ -2,7 +2,7 @@ from astropy import units as u
 from gammabayes.priors.core.wrappers import _wrap_if_missing_keyword
 from gammabayes import update_with_defaults
 from functools import partial
-
+import torch
 
 class BaseSpatial_PriorComp:
 

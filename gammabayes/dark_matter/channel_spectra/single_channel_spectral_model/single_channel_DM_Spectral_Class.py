@@ -12,6 +12,7 @@ from gammabayes import update_with_defaults
 class SingleDMChannel(object):
     """Class for efficient single channel dark matter spectra calculations."""
 
+
     
     def __init__(self, channel='W+W-',
                  default_parameter_values = {'mass':1.0,},
@@ -47,10 +48,11 @@ class SingleDMChannel(object):
             method='cubic', bounds_error=False, fill_value=0)
 
 
-        self.default_parameter_values = default_parameter_values
-        np.seterr(divide='ignore')
 
-    
+    # Yes ew
+    loglog10 = torch.log(torch.log(torch.tensor(10.)))
+
+
     def __call__(self, *args, **kwargs) -> np.ndarray | float:
         """
         Allows the instance to be called as a function.
@@ -61,8 +63,8 @@ class SingleDMChannel(object):
         return self.logfunc(*args, **kwargs)
 
 
-    def spectral_gen(self, energy: float | np.ndarray | list, 
-                           **kwargs) -> np.ndarray | float:
+
+    def spectral_gen(self, energy, mass) -> np.ndarray | float:
         """
         Generates the spectral values for the given energy and parameters.
 
@@ -72,12 +74,10 @@ class SingleDMChannel(object):
         Returns:
             np.ndarray | float: The calculated log spectrum values.
         """
-        
-        update_with_defaults(kwargs, self.default_parameter_values)
+        log10mass = np.log10(mass)
 
-
-        channel_spectrum = (self.sqrtchannelfunc((np.log10(kwargs['mass']), 
-                                                        np.log10(energy)-np.log10(kwargs['mass']))))**2 # Square is to enforce positivity
+        channel_spectrum = (self.sqrtchannelfunc((log10mass, 
+                                                        np.log10(energy)-log10mass)))**2 # Square is to enforce positivity
             
         log_channel_spectrum = np.log(channel_spectrum)
 
@@ -129,98 +129,8 @@ class SingleDMChannel(object):
         return logspectralvals
     
 
-    # This function presumes that it needs to create a mesh based on the input parameters
-        # this is handy when one doesn't want to create a mesh that includes all the observation
-        # parameter axes, spectral parameters, and spatial parameters at once, reducing dimensionality
-        # and reduces the number of needed computations
-    def mesh_efficient_logfunc(self, 
-                               energy: list | np.ndarray | float, 
-                               kwd_parameters: dict = {'mass':1.0}) -> np.ndarray | float:
-        """
-        Calculates the log spectrum values using a mesh grid for efficiency.
-
-        Args:
-            energy (list | np.ndarray | float): Energy values to calculate the spectrum for.
-            kwd_parameters (dict, optional): Keyword parameters for the calculation. Defaults to {'mass': 1.0}.
-
-        Returns:
-            np.ndarray | float: The calculated log spectrum values.
-        """
 
 
-        energy = energy.to("TeV")
-
-        new_kwd_parameters = {param_key: np.asarray(param_val) for param_key, param_val in kwd_parameters.items()}
-
-
-        param_meshes = np.meshgrid(energy, *new_kwd_parameters.values(), indexing='ij')
-
-        logspectralvals = self.logfunc(
-            energy = param_meshes[0].flatten(), 
-            kwd_parameters={param_key: param_meshes[1+idx].flatten() for idx, param_key in enumerate(new_kwd_parameters.keys())}
-            ).reshape(param_meshes[0].shape)
-        
-        return logspectralvals
-
-
-
-    def mesh_integral_efficient_logfunc(self, 
-                               energy: list | np.ndarray | float, 
-                               kwd_parameters: dict = {'mass':1.0}) -> np.ndarray | float:
-        """
-        Calculates the log spectrum values using a mesh grid and integrates for efficiency.
-
-        Args:
-            energy (list | np.ndarray | float): Energy values to calculate the spectrum for.
-            kwd_parameters (dict, optional): Keyword parameters for the calculation. Defaults to {'mass': 1.0}.
-
-        Returns:
-            np.ndarray | float: The calculated log spectrum values.
-        """
-
-
-        energy = np.asarray(energy)
-
-        new_kwd_parameters = {param_key: np.asarray(param_val) for param_key, param_val in kwd_parameters.items()}
-
-
-        for key, val in new_kwd_parameters.items():
-            new_kwd_parameters[key] = np.asarray(val) 
-
-        hyper_params_shape = new_kwd_parameters[list(new_kwd_parameters.keys())[0]].shape
-        # minimises the amount of needed memory and comp time by reducing number of combinations in meshgrid
-        flatten_hyperparam_vals = np.asarray([*[theta_param.flatten() for theta_param in new_kwd_parameters.values()]])
-            
-        unique_param_vals = np.unique(flatten_hyperparam_vals, axis=1)
-
-        param_meshes = np.meshgrid(energy, *unique_param_vals, indexing='ij')
-
-
-        logspectralvals = self.spectral_gen(
-            energy = param_meshes[0].flatten(), 
-            **{param_key: param_meshes[1+idx].flatten() for idx, param_key in enumerate(new_kwd_parameters.keys())}
-            ).reshape(param_meshes[0].shape)
-        
-        mask = np.all(unique_param_vals[:, None, :] == flatten_hyperparam_vals[:, :, None], axis=0)
-
-        slices = np.where(mask, logspectralvals[:, None, :], 0.0)
-
-
-        logspectralvals = np.sum(slices, axis=-1).reshape((energy.size, *hyper_params_shape))
-
-
-        return logspectralvals
-    
-
-    def calc_ratios(self, *args, **kwargs):
-        """
-        Calculates the ratios for the specified channel.
-
-        Returns:
-            dict: The ratio for the specified channel.
-        """
-
-        return {self.channel, 1.0}
 
 
 

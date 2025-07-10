@@ -35,7 +35,7 @@ class ExpCutoffPowerLaw(BaseSpectral_PriorComp):
 
     def __init__(self, 
                 index=torch.tensor(2.5), 
-                ref_energy=torch.tensor(1.), lambdaval=torch.tensor(1/100.), 
+                ref_energy=torch.tensor(1.), lambdaval=torch.tensor(1/100.), # cutoff energy of 100 TeV
                 phi0=torch.tensor(1e-13), *args, **kwargs):
 
         self.__log_exp_cutoff_power_law = partial(self.log_exp_cutoff_power_law, ref_energy=ref_energy, index=index, phi0=phi0, lambdaval=lambdaval)

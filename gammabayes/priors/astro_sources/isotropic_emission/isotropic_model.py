@@ -20,7 +20,7 @@ class IsotropicBrokenPowerLaw(TwoCompFluxPrior):
         name = kwargs.get("name")
 
         if name is None:
-            name='IsotropicGRB'
+            name='IGRB'
         
         kwargs['name'] = name
 

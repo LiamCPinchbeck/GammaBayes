@@ -1,3 +1,3 @@
 from .fermi_gaggero_diffuse import FermiGaggeroDiffusePrior
-from .galprop_outputs import extract_galprop_prior_template
+from .galprop_outputs import extract_galprop_components, extract_and_interpolate_galprop_components, get_galprop_static_source_flux_prior
 # from .deprecated import construct_fermi_gaggero_flux_matrix, construct_log_fermi_gaggero_bkg

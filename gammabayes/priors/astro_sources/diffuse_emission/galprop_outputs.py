@@ -1,25 +1,24 @@
 from typing import Literal
 from astropy.io import fits
+import torch
 import numpy as np
 from gammabayes import GammaBinning
 from astropy import units as u
 from gammabayes.likelihoods import IRF_LogLikelihood
 from gammabayes.priors import SourceFluxDiscreteLogPrior
 from gammabayes.utils import EnergySpatialTemplateInterpolator, download_and_unpack_tar, _get_package_data_directory
+from gammabayes import RegularTorchInterpolator
+from gammabayes.priors import StaticSourceDistTemplate, StaticDistTemplate
 from pathlib import Path
 import warnings
 
 
 
 
-def extract_galprop_prior_template(true_binning_geometry:GammaBinning, 
-                                   irf_loglike:IRF_LogLikelihood, 
+def extract_galprop_components(binning_geometry:GammaBinning, 
                                    component:Literal['pion','bremss','ics','all', 'custom']='all', 
                                    custom_galprop_fits_file_path=None,
                                    resolution:Literal['Medium', 'High']='Medium',
-                                   log_exposure_map = None,
-                                   pointing_dirs=None,
-                                   live_times=None,
                                    **kwargs
                                    ):
 
@@ -53,9 +52,9 @@ Medium (the default) should take up about 130MB of disk space while High takes u
 
 
         if component=='all':
-            return (extract_galprop_prior_template(true_binning_geometry=true_binning_geometry, irf_loglike=irf_loglike, component='pion', resolution=text_res),
-                    extract_galprop_prior_template(true_binning_geometry=true_binning_geometry, irf_loglike=irf_loglike, component='bremss', resolution=text_res),
-                    extract_galprop_prior_template(true_binning_geometry=true_binning_geometry, irf_loglike=irf_loglike, component='ics', resolution=text_res))
+            return (extract_galprop_prior_template(binning_geometry=binning_geometry, irf_loglike=irf_loglike, component='pion', resolution=text_res),
+                    extract_galprop_prior_template(binning_geometry=binning_geometry, irf_loglike=irf_loglike, component='bremss', resolution=text_res),
+                    extract_galprop_prior_template(binning_geometry=binning_geometry, irf_loglike=irf_loglike, component='ics', resolution=text_res))
         else:
 
             component_dict = {'pion':'pion_decay_skymap', 'bremss':'bremss_skymap', 'ics':'ics_skymap_comp'}
@@ -92,7 +91,7 @@ Medium (the default) should take up about 130MB of disk space while High takes u
                                     __header["CRVAL3"]+__header["CDELT3"]*__header["NAXIS3"], 
                                     __header["NAXIS3"])
     
-
+    energy_axis = energy_axis/1e6
 
     # Checking to see if the axes are about the Galactic Centre. 
     #   If the bounds of the longitude axis multiply to something negative then they must be different signs
@@ -108,20 +107,20 @@ Medium (the default) should take up about 130MB of disk space while High takes u
 
 
     # Finding longitude and latitude values that fall within the bounds of the given binning geometry
-    care_about_lon_mask = np.logical_and(np.where(new_longitude_axis<=true_binning_geometry.lon_axis[-1].value+2*true_binning_geometry.lon_res.value, True, False), 
-                                         np.where(new_longitude_axis>=true_binning_geometry.lon_axis[0].value-2*true_binning_geometry.lon_res.value, True, False))
-    care_about_lat_mask = np.logical_and(np.where(lat_axis_2<=true_binning_geometry.lat_axis[-1].value+2*true_binning_geometry.lat_res.value, True, False), 
-                                         np.where(lat_axis_2>=true_binning_geometry.lat_axis[0].value-2*true_binning_geometry.lat_res.value, True, False))
+    care_about_lon_mask = np.logical_and(np.where(new_longitude_axis<=binning_geometry.lon_axis[-1].numpy()+2*binning_geometry.lon_res.numpy(), True, False), 
+                                         np.where(new_longitude_axis>=binning_geometry.lon_axis[0].numpy()-2*binning_geometry.lon_res.numpy(), True, False))
+    care_about_lat_mask = np.logical_and(np.where(lat_axis_2<=binning_geometry.lat_axis[-1].numpy()+2*binning_geometry.lat_res.numpy(), True, False), 
+                                         np.where(lat_axis_2>=binning_geometry.lat_axis[0].numpy()-2*binning_geometry.lat_res.numpy(), True, False))
+
+    new_longitude_axis = new_longitude_axis[care_about_lon_mask]
+    lat_axis_2 = lat_axis_2[care_about_lat_mask]
 
 
-
-
-
-    galprop_binning_geometry = GammaBinning(
-        energy_axis=energy_axis*u.MeV,
-        lon_axis=new_longitude_axis[care_about_lon_mask]*u.deg,
-        lat_axis=lat_axis_2[care_about_lat_mask]*u.deg
-    )
+    # galprop_binning_geometry = GammaBinning(
+    #     energy_axis=energy_axis,
+    #     lon_axis=new_longitude_axis,
+    #     lat_axis=lat_axis_2
+    # )
 
 
 
@@ -131,34 +130,73 @@ Medium (the default) should take up about 130MB of disk space while High takes u
 
 
     reformatted_data_matrix = np.transpose(np.sum(__data, axis=-1), axes=(2,0,1))
-
+    reformatted_data_matrix = reformatted_data_matrix/((1e6*energy_axis)**2)[:, None, None]*((u.TeV/u.MeV) * ((u.deg**2)/(u.sr))).to("")
 
 
     del __header
     del __data
 
-    template_model = EnergySpatialTemplateInterpolator(
-        binning_geometry=galprop_binning_geometry,
-        data=reformatted_data_matrix/galprop_binning_geometry.energy_axis.value[:, None, None]**2*((u.TeV/u.MeV) * ((u.m)**2/(u.cm)**2) * ((u.deg**2)/(u.sr))).to(""),
-        interpolation_method='linear'
-        )
 
-    # Subsequent units for all components is originally MeV^2 cm^{-2} s^{-1} sr^{-1} MeV^{-1}
-        # After above manipulation is m^{-2} s^{-1} deg^{-2} TeV^{-1}
+    return {
+        'energy_axis':torch.tensor(energy_axis), 
+        'lon_axis':torch.tensor(new_longitude_axis), 
+        'lat_axis':torch.tensor(lat_axis_2), 
+        'data':torch.tensor(reformatted_data_matrix)}
 
 
+def extract_and_interpolate_galprop_components(
+    binning_geometry:GammaBinning, 
 
-    template_prior = SourceFluxDiscreteLogPrior(
-        name=component+'_template_prior',
-        binning_geometry=true_binning_geometry,
-        irf_loglike=irf_loglike,
-        log_flux_function=template_model,
-        log_exposure_map=log_exposure_map,
-        pointing_dirs=pointing_dirs,
-        live_times=live_times,
-        **kwargs
-    )
+    component:Literal['pion','bremss','ics','all', 'custom']='all', 
+    custom_galprop_fits_file_path=None,
+    resolution:Literal['Medium', 'High']='Medium',
+    extracted_galprop_information = None,
+    **kwargs):
+
+    if extracted_galprop_information is None:
+        extracted_galprop_information = extract_galprop_components(
+            binning_geometry=binning_geometry, 
+            component=component, 
+            custom_galprop_fits_file_path=custom_galprop_fits_file_path,
+            resolution=resolution,
+            **kwargs)
+
+    template_interpolator = RegularTorchInterpolator(
+        (
+            np.log10(extracted_galprop_information['energy_axis']), 
+            extracted_galprop_information['lon_axis'], 
+            extracted_galprop_information['lat_axis']
+            ), 
+        extracted_galprop_information['data'])
+
+    grid = binning_geometry.shaped_grid
+
+    log10egrid = torch.stack([torch.log10(grid[..., 0].flatten()), grid[..., 1].flatten(), grid[..., 2].flatten()], dim=0)
+    
+    log_flux_interpolated = torch.log(template_interpolator(log10egrid)).reshape((grid[..., 0]).shape)
+
+    return log_flux_interpolated
 
 
+def get_galprop_static_source_flux_prior(binning_geometry:GammaBinning, 
 
-    return template_prior
+        component:Literal['pion','bremss','ics','all', 'custom']='all', 
+        custom_galprop_fits_file_path=None,
+        resolution:Literal['Medium', 'High']='Medium',
+        extracted_galprop_information = None,
+        *args, **kwargs):
+
+    log_flux_interpolated = extract_and_interpolate_galprop_components(
+        binning_geometry=binning_geometry, 
+        component=component, 
+        custom_galprop_fits_file_path=custom_galprop_fits_file_path,
+        resolution=resolution,
+        extracted_galprop_information = extracted_galprop_information)
+
+    return StaticSourceDistTemplate(
+                source_flux_tensor_logtemplate = log_flux_interpolated,
+                binning_geometry=binning_geometry,
+                *args, **kwargs
+                )
+
+    
