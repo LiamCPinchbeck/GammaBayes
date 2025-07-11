@@ -1,13 +1,6 @@
-import numpy as np
-import astropy.units as u
-
-
-import numpy as np
-import astropy.units as u
-from gammabayes.utils import logspace_riemann
-from gammabayes import haversine, update_with_defaults
+import numpy as np, time, torch
+# import astropy.units as u
 from .base_dm_profile import DM_Profile
-import time
 
 
 
@@ -52,9 +45,10 @@ class Einasto_Profile(DM_Profile):
 
 
         super().__init__(
-            log_profile_func=self._log_profile_func, 
+            log_profile_func=self.log_density_profile_func, 
             rho_s=rho_s,
             r_s=r_s,
+            alpha=alpha,
             *args, **kwargs
         )
 

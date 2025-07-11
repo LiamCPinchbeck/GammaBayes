@@ -1,11 +1,10 @@
-import numpy as np
-import astropy.units as u
+import numpy as np, time, torch
+# import astropy.units as u
 # from gammabayes.utils import logspace_riemann, logspace_simpson
 from gammabayes import haversine
 from gammabayes.priors.spatial_components import BaseSpatial_PriorComp
-from scipy import special
-import time
-
+from functools import partial
+from icecream import ic
 
 class DM_Profile(BaseSpatial_PriorComp):
     """Class for dark matter density profiles and related calculations."""
@@ -15,27 +14,22 @@ class DM_Profile(BaseSpatial_PriorComp):
 
     def __init__(self, 
                  log_profile_func: callable, 
-                 r_s,
                  rho_s=torch.tensor(1.),
                  LOCAL_DENSITY  = torch.tensor(0.00039), #*u.Unit("TeV/cm3"), 
                  dist_to_source = torch.tensor(8.5), # u.kpc, 
                  annihilation = torch.tensor(1.),
                  angular_central_coords = torch.tensor([0,0]), #u.deg,
                  int_resolution: int = 101, 
-                 integration_method: callable = logspace_riemann, 
-                 **kwargs
+                 *args, **kwargs
                  ):
 
         self._log_profile_func          = log_profile_func
         self.LOCAL_DENSITY              = LOCAL_DENSITY
         self.DISTANCE                   = dist_to_source
         self.annihilation               = annihilation
-        self.kwd_profile_default_vals   = kwd_profile_default_vals
 
         self.rho_s                      = rho_s
-        self.r_s                        = r_s
         self.angular_central_coords     = angular_central_coords
-        self.scale_density_profile(self.LOCAL_DENSITY, self.DISTANCE, **kwd_profile_default_vals)
 
         self.int_resolution = int_resolution
         self.t_range = torch.linspace(0, 4, self.int_resolution)
@@ -65,24 +59,27 @@ class DM_Profile(BaseSpatial_PriorComp):
 
         rho_s = DM_Profile.calc_new_scale_density_to_refs(
             ref_density=ref_density, ref_density_radius=ref_density_radius, log_profile_func=log_profile_func,
-            alpha=alpha, rho_s=rho_s, r_s=r_s)
+            rho_s=rho_s, *args, **kwargs)
 
-        __log_profile_func = partial(log_profile_func, rho_s=rho_s, r_s=r_s, **kwargs)
+        __log_profile_func = partial(log_profile_func, rho_s=rho_s, *args, **kwargs)
 
         return __log_profile_func
 
 
-    def logdiffJ(self, longitude, latitude, **kwargs) :
+    def logdiffJ(self, lonlatgrid, **kwargs) :
+
+        lon_grid = lonlatgrid[..., 0]
+        lat_grid = lonlatgrid[..., 1]
         
-        angular_offset = haversine(longitude, 
-                                   latitude, 
+        angular_offset = haversine(lon_grid.flatten(), 
+                                   lat_grid.flatten(), 
                                    self.angular_central_coords[0], 
                                    self.angular_central_coords[1],)
 
-        return self.__log_diffJ_from_offset(theta=angular_offset, kwargs) # No point unpacking, packing and the re-unpacking the kwargs
+        return self.__log_diffJ_from_offset(theta=angular_offset, kwargs=kwargs).reshape(lat_grid.shape) # No point unpacking, packing and the re-unpacking the kwargs
 
 
-    def __log_diffJ_from_offset(theta, kwargs):
+    def __log_diffJ_from_offset(self, theta, kwargs):
         # Convert to radians
         theta_rad = torch.deg2rad(theta)
 

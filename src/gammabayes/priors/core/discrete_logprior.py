@@ -141,10 +141,17 @@ class DiscreteLogPrior:
         return torch.logsumexp(log_dist_values, dim=dims)
 
 
-    def peek(self, pcm_kwargs={}, **params):
+    def peek(self, pcm_kwargs={}, plot_kwargs={}, **params):
         if 'norm' not in pcm_kwargs:
             pcm_kwargs['norm'] = 'log'
-            
+
+        if 'yscale' not in plot_kwargs:
+            plot_kwargs['yscale'] = 'log'
+
+        if 'xscale' not in plot_kwargs:
+            plot_kwargs['xscale'] = 'log'
+
+
         from matplotlib import pyplot as plt
 
         full_mat = self.eval_log_on_geom(**params)
@@ -157,8 +164,7 @@ class DiscreteLogPrior:
         axes[0].plot(self.binning_geometry.energy_axis, energy_mat)
         axes[0].set(
             xlabel="True Energy [TeV]",
-            xscale='log',
-            yscale='log'
+            **plot_kwargs
         )
 
         pcm = axes[1].pcolormesh(*self.binning_geometry.spatial_axes, lonlat_mat.T, **pcm_kwargs)
