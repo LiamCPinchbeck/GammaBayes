@@ -1,4 +1,5 @@
 import torch
+from functools import partial
 from gammabayes.priors import TwoCompFluxPrior
 from gammabayes.dark_matter import PPPCReader, SingleDMSpectralComp
 from gammabayes.dark_matter.density_profiles import DM_Profile, Einasto_Profile
@@ -7,8 +8,9 @@ from gammabayes.dark_matter.density_profiles import DM_Profile, Einasto_Profile
 class SingleChannelDMPrior(TwoCompFluxPrior):
 
                                     # cm^3/s          TeV
-    def __init__(self, binning_geometry, channel, 
-                    sigmavval=3e-26, mass=1., symmetry_factor=torch.tensor(1.), 
+    def __init__(self, channel='W', 
+                    binning_geometry=None,
+                    sigmav=3e-26, mass=1., symmetry_factor=torch.tensor(1.), 
                     spatial_profile=Einasto_Profile,
                     spatial_profile_kwargs=None,
                     **kwargs):
