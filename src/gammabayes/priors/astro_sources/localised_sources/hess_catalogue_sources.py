@@ -1,7 +1,5 @@
 # Necessary imports for the script functionality
 from gammabayes import resources_dir, haversine, GammaBinning, GammaLogExposure
-from gammabayes.utils import iterate_logspace_integration
-from gammabayes.likelihoods.irfs import IRF_LogLikelihood
 from gammabayes.priors.core import DiscreteLogPrior, SourceFluxDiscreteLogPrior
 
 
@@ -198,7 +196,7 @@ class HESSCatalogueSources_Prior(SourceFluxDiscreteLogPrior):
         energy_axis (np.ndarray): Energy axis for the prior (TeV).
         longitudeaxis (np.ndarray): Longitude axis for the prior (degrees).
         latitudeaxis (np.ndarray): Latitude axis for the prior (degrees).
-        irf (IRF_LogLikelihood): Instrument Response Function log likelihood instance.
+        irf: Instrument Response Function log likelihood instance.
         normalise (bool, optional): Whether to normalise the prior. Defaults to True.
         iterate_logspace_integrator (callable, optional): Function for integration over log space for normalisation. Defaults to iterate_logspace_integration.
     """
@@ -219,7 +217,7 @@ class HESSCatalogueSources_Prior(SourceFluxDiscreteLogPrior):
             
             latitudeaxis (np.ndarray): Latitude axis for the prior (degrees).
             
-            irf (IRF_LogLikelihood): Instrument Response Function log likelihood instance.
+            irf: Instrument Response Function log likelihood instance.
             
             normalise (bool, optional): Whether to normalise the prior. Defaults to True.
             

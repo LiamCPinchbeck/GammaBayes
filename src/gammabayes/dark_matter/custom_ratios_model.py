@@ -50,31 +50,16 @@ class CustomDMRatiosModel(object):
 
     def __init__(self, 
                  irf_loglike:DiscreteLogLikelihood, 
-                 axes: list | tuple | np.ndarray,
                  spatial_class: DM_Profile = Einasto_Profile, 
                  spatial_class_kwds: dict= None,
-                 name='DM',
-                 channels: list[str] | str = 'all',
+                 channels: list[str] | str = 'high_mass',
                  default_spectral_parameters: dict = {},
                  default_spatial_parameters: dict = {},
 
                  ratios: dict = None,
                  *args, **kwargs
                  ):
-        """
-        Initializes the CustomDMRatiosModel object.
 
-        Args:
-            irf_loglike (DiscreteLogLikelihood): The likelihood function based on IRFs.
-            axes (list | tuple | np.ndarray): The axes for the likelihood function.
-            spatial_class (DM_Profile, optional): The spatial profile class. Defaults to Einasto_Profile.
-            channels (list[str] | str, optional): The list of channels or 'all'. Defaults to 'all'.
-            default_spectral_parameters (dict, optional): Default spectral parameters. Defaults to {}.
-            default_spatial_parameters (dict, optional): Default spatial parameters. Defaults to {}.
-
-        Raises:
-            ValueError: If an invalid channel input is provided.
-        """
         
         # Getting all possible channels as in the PPPC tables
         self.name = name

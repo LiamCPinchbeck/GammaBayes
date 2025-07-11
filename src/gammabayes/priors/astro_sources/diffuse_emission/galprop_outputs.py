@@ -4,7 +4,6 @@ import torch
 import numpy as np
 from gammabayes import GammaBinning
 from astropy import units as u
-from gammabayes.likelihoods import IRF_LogLikelihood
 from gammabayes.priors import SourceFluxDiscreteLogPrior
 from gammabayes.utils import EnergySpatialTemplateInterpolator, download_and_unpack_tar, _get_package_data_directory
 from gammabayes import RegularTorchInterpolator

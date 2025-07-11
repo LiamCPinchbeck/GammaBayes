@@ -6,7 +6,7 @@ single_channel_spectral_data_path = os.path.dirname(os.path.dirname(__file__))
 from .PPPC_reader import PPPCReader
 
 
-class SingleDMChannel(BaseSpectral_PriorComp):
+class SingleDMSpectralComp(BaseSpectral_PriorComp):
     """Class for efficient single channel dark matter spectra calculations."""
 
     

@@ -1,6 +1,6 @@
 from .parameter_set_class import ParameterSet
 from .parameter_class import Parameter
-from .core_utils import update_with_defaults
+from .utils import update_with_defaults
 import numpy as np
 
 from icecream import ic
