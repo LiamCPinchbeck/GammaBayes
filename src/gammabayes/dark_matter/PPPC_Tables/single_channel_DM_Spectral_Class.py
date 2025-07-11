@@ -10,7 +10,7 @@ class SingleDMSpectralComp(BaseSpectral_PriorComp):
     """Class for efficient single channel dark matter spectra calculations."""
 
     
-    def __init__(self, binning_geometry, channel='W+W-', mass = torch.tensor(1.), *args, **kwargs):
+    def __init__(self, binning_geometry=None, channel='W+W-', mass = torch.tensor(1.), *args, **kwargs):
         """
         Initializes the SingleDMChannel class with specified parameters.
 

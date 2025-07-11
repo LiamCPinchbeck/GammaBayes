@@ -35,9 +35,9 @@ class SingleChannelDMPrior(TwoCompFluxPrior):
                                                 symmetry_factor=symmetry_factor)
 
         super().__init__(
+            binning_geometry=binning_geometry,
             spectral_comp = self.spectral_comp_logfunc,
             spatial_comp = self.spatial_comp,
-            binning_geometry=binning_geometry,
             **kwargs
         )
 
