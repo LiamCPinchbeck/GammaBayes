@@ -73,7 +73,8 @@ class SingleDMSpectralComp(BaseSpectral_PriorComp):
         # Converting it from dN/dlog10x to dN/dE
         log_channel_spectrum =log_channel_spectrum - torch.log(energy) - self.loglog10
 
-        log_channel_spectrum = torch.where(energy>mass, -50, log_channel_spectrum)
+        # -50 - 3*torch.log(energy) is a proxy for zero that allows nicer numerical stability
+        log_channel_spectrum = torch.where(energy>mass, -50 - 3*torch.log(energy), log_channel_spectrum)
 
         return log_channel_spectrum
 

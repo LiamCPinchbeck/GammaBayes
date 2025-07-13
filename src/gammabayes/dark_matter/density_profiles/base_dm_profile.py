@@ -15,8 +15,8 @@ class DM_Profile(BaseSpatial_PriorComp):
     def __init__(self, 
                  log_profile_func: callable, 
                  rho_s=torch.tensor(1.),
-                 LOCAL_DENSITY  = torch.tensor(0.00039), #*u.Unit("TeV/cm3"), 
-                 dist_to_source = torch.tensor(8.5), # u.kpc, 
+                 LOCAL_DENSITY  = torch.tensor(3.9e-4), #*u.Unit("TeV/cm3"), 
+                 dist_to_source = torch.tensor(8.3), # u.kpc, 
                  annihilation = torch.tensor(1.),
                  angular_central_coords = torch.tensor([0,0]), #u.deg,
                  int_resolution: int = 101, 
@@ -76,10 +76,10 @@ class DM_Profile(BaseSpatial_PriorComp):
                                    self.angular_central_coords[0], 
                                    self.angular_central_coords[1],)
 
-        return self.__log_diffJ_from_offset(theta=angular_offset, kwargs=kwargs).reshape(lat_grid.shape) # No point unpacking, packing and the re-unpacking the kwargs
+        return self._log_diffJ_from_offset(theta=angular_offset, kwargs=kwargs).reshape(lat_grid.shape) # No point unpacking, packing and the re-unpacking the kwargs
 
 
-    def __log_diffJ_from_offset(self, theta, kwargs):
+    def _log_diffJ_from_offset(self, theta, kwargs):
         # Convert to radians
         theta_rad = torch.deg2rad(theta)
 
@@ -96,7 +96,7 @@ class DM_Profile(BaseSpatial_PriorComp):
         radii = torch.sqrt((positions**2).sum(dim=(0)))
 
         # Calculate adjusted densities along lines of sight
-        log_densities_to_integrate = (1+self.annihilation)*self.log_profile_func(radii, **kwargs)
+        log_densities_to_integrate = (1.+self.annihilation)*self.log_profile_func(radii, **kwargs)
 
         # Integrate and return
         return torch.logsumexp(log_densities_to_integrate + torch.log(dsdt[:, None]), dim=1) + self.log_integral_constants

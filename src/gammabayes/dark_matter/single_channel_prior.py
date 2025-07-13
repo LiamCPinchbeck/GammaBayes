@@ -29,7 +29,7 @@ class SingleChannelDMPrior(TwoCompFluxPrior):
 
         self.spatial_comp = spatial_profile
 
-        self.constant_spectral_log_prefactor = torch.tensor(1/(8*torch.pi))
+        self.constant_spectral_prefactor = torch.tensor(1/(8*torch.pi))
 
         self.spectral_comp_logfunc = partial(self._spectral_comp_logfunc, 
                                                 mass=mass, 
@@ -46,7 +46,7 @@ class SingleChannelDMPrior(TwoCompFluxPrior):
 
     def _spectral_comp_logfunc(self, energy, mass, sigmav, symmetry_factor):
 
-        logprefactor = torch.log(sigmav*self.constant_spectral_log_prefactor/(symmetry_factor*mass**2))
+        logprefactor = torch.log(sigmav*self.constant_spectral_prefactor/(symmetry_factor*mass**2))
 
         mass = mass*torch.ones_like(energy)
 
