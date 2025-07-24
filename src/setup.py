@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(name='GammaBayes',
       description='A package for Bayesian dark matter inference on gamma-ray event data',
-      url='https://github.com/lpin0002/GammaBayes',
+      url='https://github.com/LiamCPinchbeck/GammaBayes',
       author='Liam Pinchbeck',
       author_email='Liam.Pinchbeck@monash.edu',
       license="MIT",
