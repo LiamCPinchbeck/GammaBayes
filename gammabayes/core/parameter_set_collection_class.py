@@ -319,7 +319,7 @@ f"""{param['_internal_name']} is not discrete. Prior parameters are presumed to 
         Computes the log of the probability density function (logPDF) for the given input.
 
         Args:
-            input (array-like): Input values for which to compute the logPDF.
+            input_vals (array-like): Input values for which to compute the logPDF.
 
         Returns:
             float: The computed logPDF value.

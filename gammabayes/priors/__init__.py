@@ -1,2 +1,2 @@
 from .core import DiscreteLogPrior, TwoCompFluxPrior, SourceFluxDiscreteLogPrior, ObsFluxDiscreteLogPrior
-from .astro_sources import HESSCatalogueSources_Prior, FermiGaggeroDiffusePrior, IsotropicPowerLaw, IsotropicBrokenPowerLaw, extract_galprop_prior_template
+from .astro_sources import HESSCatalogueSources_Prior, FermiGaggeroDiffusePrior, IsotropicPowerLaw, IsotropicBrokenPowerLaw, extract_galprop_prior_template, HESSCatalogueSources_Prior_WithBounds
