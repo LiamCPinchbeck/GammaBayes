@@ -16,17 +16,19 @@ def make_normal_kernel_with_std_and_bins(linear_axis, std, confidence_clearance=
     return base_normal_dist.log_prob(kernel_pseudo_axis).exp()
 
 
+loge10 = torch.log(torch.tensor(10.))
 
-def make_irf_kernel(geom, log10energy_std, lon_std, lat_std):
+def make_irf_kernel(geom, log10energy_std, lon_std, lat_std, confidence_clearance=5):
 
     log10_energy_kernel_axis = make_normal_kernel_with_std_and_bins(
-        torch.log10(geom.energy_axis), log10energy_std/torch.log10(torch.tensor(torch.e)), confidence_clearance=5)
+        torch.log10(geom.energy_axis), 
+        log10energy_std/torch.log10(torch.tensor(torch.e)), confidence_clearance=confidence_clearance)
 
     longitude_kernel_axis = make_normal_kernel_with_std_and_bins(
-        geom.lon_axis, lon_std, confidence_clearance=5)
+        geom.lon_axis, lon_std, confidence_clearance=confidence_clearance)
 
     latitude_kernel_axis = make_normal_kernel_with_std_and_bins(
-        geom.lat_axis, lat_std, confidence_clearance=5)
+        geom.lat_axis, lat_std, confidence_clearance=confidence_clearance)
 
     irf_kernel = log10_energy_kernel_axis[:, None, None]*longitude_kernel_axis[None, :, None]*latitude_kernel_axis[None, None, :]
 

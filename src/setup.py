@@ -8,15 +8,15 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 
 setup(name='GammaBayes',
-      description='A package for Bayesian dark matter inference on gamma-ray event data',
-      url='https://github.com/LiamCPinchbeck/GammaBayes',
-      author='Liam Pinchbeck',
-      author_email='Liam.Pinchbeck@monash.edu',
-      license="MIT",
-      version='2.0.0',
+    description='A package for Bayesian dark matter inference on gamma-ray event data',
+    url='https://github.com/LiamCPinchbeck/GammaBayes',
+    author='Liam Pinchbeck',
+    author_email='Liam.Pinchbeck@monash.edu',
+    license="MIT",
+    version='2.0.1',
 
-      packages=find_packages(),
-        long_description=long_description,  # This is the long description, read from README.md
+    packages=find_packages(),
+    long_description=long_description,  # This is the long description, read from README.md
     long_description_content_type="text/markdown",  
       # For a lot of the DM spectral classes we require that dict types are ordered
       python_requires='>=3.6, <=3.12.7',

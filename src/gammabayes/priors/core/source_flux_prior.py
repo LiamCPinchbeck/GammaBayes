@@ -41,12 +41,14 @@ class SourceFluxDiscreteLogPrior(DiscreteLogPrior):
         else:
             self.binning_geometry = binning_geometry
 
-
-        self.log_exposure_map = GammaLogExposure(binning_geometry=self.binning_geometry, 
-                                                irfs=self.irf_loglike,
-                                                log_exposure_map=log_exposure_map, 
-                                                pointing_dirs=pointing_dirs, 
-                                                live_times=live_times,)
+        if log_exposure_map is None:
+            self.log_exposure_map = GammaLogExposure(binning_geometry=self.binning_geometry, 
+                                                    irfs=self.irf_loglike,
+                                                    log_exposure_map=log_exposure_map, 
+                                                    pointing_dirs=pointing_dirs, 
+                                                    live_times=live_times,)
+        else:
+            self.log_exposure_map = log_exposure_map
 
         super().__init__(
                  rate_tensor_logfunc=self.log_rate_source_function, 

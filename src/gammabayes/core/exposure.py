@@ -24,15 +24,18 @@ class GammaLogExposure:
 
                  # One second is taken as most differential fluxes are per second, so this works as a unit where the absolute values are the quantities don't change
                  live_times=1*u.s, 
+                 
                  use_log_aeff: bool = True,
                  apply_bin_widths: bool = True,
                  # By default the units of the effective area are taken to be u.cm**2 and intermediary calculations use seconds when needed
                  unit_bases = None, 
+                 log_obs_time_map = None
                  ):
         if unit_bases is None:
             unit_bases = [u.cm, u.s] 
         
         self.use_log_aeff = use_log_aeff
+        self.apply_bin_widths = apply_bin_widths
 
         if isinstance(log_exposure_map, GammaLogExposure):
             for attr, value in log_exposure_map.__dict__.items():
@@ -70,6 +73,13 @@ class GammaLogExposure:
             if not(log_exposure_map is None):
                 self.log_exposure_map = log_exposure_map
                 self.log_obs_time_map = log_obs_time_map
+
+                if self.log_obs_time_map is None:
+                    self.log_obs_time_map = (live_times/u.s).to("")
+
+                if self.log_obs_time_map.dim() == 0:
+                    self.log_obs_time_map = torch.full(self.binning_geometry.shape, self.log_obs_time_map)
+
                 self._exp_interpolator = RegularTorchInterpolator(self.binning_geometry.axes, torch.exp(self.log_exposure_map))
                 self._exp_obs_time_interpolator = RegularTorchInterpolator(self.binning_geometry.axes, torch.exp(self.log_obs_time_map))
             else:
@@ -207,7 +217,10 @@ class GammaLogExposure:
             log_exposure_vals = torch.logaddexp(log_exposure_vals, self.log_aeff(*self.binning_geometry.axes_mesh, pointing_dir=pointing_dir)+torch.log(live_time)+self.log_unit_converter)
 
     
-        self.log_exposure_map = log_exposure_vals + torch.log(self.binning_geometry.bin_width_mat)
+        if self.apply_bin_widths:
+            self.log_exposure_map = log_exposure_vals + torch.log(self.binning_geometry.bin_width_mat)
+        else:
+            self.log_exposure_map = log_exposure_vals
 
         # Have to interpolate exposure not log_exposure due to possible -inf values
         self._exp_interpolator = RegularTorchInterpolator(self.binning_geometry.axes, torch.exp(self.log_exposure_map))

@@ -141,7 +141,7 @@ class DiscreteLogPrior:
         return torch.logsumexp(log_dist_values, dim=dims)
 
 
-    def peek(self, pcm_kwargs={}, plot_kwargs={}, **params):
+    def peek(self, pcm_kwargs={}, plot_kwargs={}, fig_kwargs = {}, **params):
         if 'norm' not in pcm_kwargs:
             pcm_kwargs['norm'] = 'log'
 
@@ -150,6 +150,8 @@ class DiscreteLogPrior:
 
         if 'xscale' not in plot_kwargs:
             plot_kwargs['xscale'] = 'log'
+        if 'figsize' not in fig_kwargs:
+            fig_kwargs['figsize'] = (18, 10)
 
 
         from matplotlib import pyplot as plt
@@ -159,7 +161,9 @@ class DiscreteLogPrior:
         energy_mat = torch.logsumexp(full_mat, dim=(1,2)).exp()
         lonlat_mat = torch.logsumexp(full_mat, dim=0).exp()
 
-        fig, axes = plt.subplots(1, 2, figsize=(18, 5))
+        fig, axes = plt.subplots(2, 2, **fig_kwargs)
+
+        axes = axes.flatten()
 
         axes[0].plot(self.binning_geometry.energy_axis, energy_mat)
         axes[0].set(
@@ -175,6 +179,24 @@ class DiscreteLogPrior:
             ylabel="Galactic Latitude [deg]",
             aspect='equal',
         )
+
+
+        axes[2].plot(self.binning_geometry.energy_axis, full_mat.exp()[:, full_mat.shape[1]//2, full_mat.shape[2]//2,])
+        axes[2].set(
+            xlabel="True Energy [TeV]",
+            **plot_kwargs
+        )
+
+        pcm = axes[3].pcolormesh(*self.binning_geometry.spatial_axes, full_mat.exp()[torch.abs(self.binning_geometry.energy_axis - 1.).argmin(), :, :].T, **pcm_kwargs)
+
+        plt.colorbar(pcm, ax=axes[3])
+        axes[3].set(
+            xlabel="Galactic Longitude [deg]",
+            ylabel="Galactic Latitude [deg]",
+            aspect='equal',
+        )
+
+        plt.tight_layout()
 
         return fig, axes
 

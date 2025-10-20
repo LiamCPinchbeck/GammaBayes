@@ -74,7 +74,7 @@ class IRFExtractor(object):
         # self.psf3d.normalize()
 
         self.aeff_default       = self.extracted_default_irfs['aeff']
-        self.CCR_BKG       = self.extracted_default_irfs['bkg'].to_2d()
+        self.CCR_BKG            = self.extracted_default_irfs['bkg'].to_2d()
 
         self.zenith = zenith_angle
         self.hemisphere = hemisphere
