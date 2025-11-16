@@ -4,7 +4,7 @@ from itertools import product
 
 
 class RegularTorchInterpolator:
-
+    "linear interpolator"
     def __init__(self, points, values):
         self.points = points
         self.values = values

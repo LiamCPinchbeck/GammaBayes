@@ -3,4 +3,4 @@ from .two_comp_prior import TwoCompFluxPrior
 from .source_flux_prior import SourceFluxDiscreteLogPrior
 from .wrappers import _wrap_if_missing_keyword
 from .static_rate_template import StaticDistTemplate, StaticSourceDistTemplate
-from .point_dist_template import PointDistTemplate
+# from .point_dist_template import PointDistTemplate

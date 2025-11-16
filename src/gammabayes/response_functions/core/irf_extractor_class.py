@@ -105,10 +105,15 @@ class IRFExtractor(object):
 
     def log_aeff(self, energy, lon, lat, pointing_dir=torch.tensor([0,0]), parameters={}):
 
-        return torch.tensor(self.aeff_default.evaluate(energy_true = energy*u.TeV, 
+        result = torch.tensor(self.aeff_default.evaluate(energy_true = energy*u.TeV, 
                                 offset=haversine(
                                     lon, lat, pointing_dir[0], pointing_dir[1])*u.deg).to(self.aeff_units).value).log()
-        
+
+        result = torch.where(torch.isneginf(result), -100, result)
+
+        return result
+
+
     def log_edisp(self, recon_energy, 
                   true_energy, true_lon, true_lat, 
                   pointing_dir=torch.tensor([0.,0.]), parameters:dict={}, migration_cut=torch.tensor(11.)):

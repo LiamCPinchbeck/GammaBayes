@@ -132,13 +132,13 @@ class DiscreteLogPrior:
 
     def log_normalisation(self, log_prior_values, parameters={}, *args, **kwargs):
         if (log_prior_values is []) | (log_prior_values is None):
-            log_dist_values = self.eval_log_on_geom(**parameters)
+            log_prior_values = self.eval_log_on_geom(**parameters)
 
         # Annoying PyTorch Error where if you specify None as in the documentation it raises an error
             # This ensure that all the axes are reduced, regardless of dimension
-        dims = tuple(torch.arange(log_dist_values.ndim).numpy())
+        dims = tuple(torch.arange(log_prior_values.ndim).numpy())
 
-        return torch.logsumexp(log_dist_values, dim=dims)
+        return torch.logsumexp(log_prior_values, dim=dims)
 
 
     def peek(self, pcm_kwargs={}, plot_kwargs={}, fig_kwargs = {}, **params):

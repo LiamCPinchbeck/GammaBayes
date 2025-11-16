@@ -1,2 +1,2 @@
-from .core import DiscreteLogPrior, TwoCompFluxPrior, SourceFluxDiscreteLogPrior, StaticDistTemplate, StaticSourceDistTemplate, PointDistTemplate
+from .core import DiscreteLogPrior, TwoCompFluxPrior, SourceFluxDiscreteLogPrior, StaticDistTemplate, StaticSourceDistTemplate#, PointDistTemplate
 from .astro_sources import HESSCatalogueSources_Prior, IsotropicPowerLaw, IsotropicBrokenPowerLaw, extract_galprop_components, get_galprop_static_source_flux_prior

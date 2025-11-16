@@ -54,72 +54,60 @@ class Einasto_Profile(DM_Profile):
 
 
 
-# class GNFW_Profile(DM_Profile):
-#     """Generalized NFW (GNFW) or Zhao dark matter density profile."""
+class GNFW_Profile(DM_Profile):
+    """Generalized NFW (GNFW) or Zhao dark matter density profile."""
 
-#     @staticmethod
-#     def log_profile(radius: float | np.ndarray , 
-#                          r_s: float, 
-#                          alpha: float, 
-#                          beta: float, 
-#                          gamma: float, 
-#                          rho_s: float):
-#         """
-#         Computes the logarithm of the GNFW density profile.
+    @staticmethod
+    def log_density_profile_func(
+        radius, r_s,
+        alpha, beta, gamma, rho_s):
+        """
+        Computes the logarithm of the GNFW density profile.
 
-#         Args:
-#             radius (float | np.ndarray): Radial distance.
-#             r_s (float): Scale radius.
-#             alpha (float): alpha parameter.
-#             beta (float): beta parameter.
-#             gamma (float): gamma parameter.
-#             rho_s (float): Scale density.
+        Args:
+            radius (float | np.ndarray): Radial distance.
+            r_s (float): Scale radius.
+            alpha (float): alpha parameter.
+            beta (float): beta parameter.
+            gamma (float): gamma parameter.
+            rho_s (float): Scale density.
 
-#         Returns:
-#             float | np.ndarray: Logarithm of the density profile.
-#         """
+        Returns:
+            float | np.ndarray: Logarithm of the density profile.
+        """
         
-#         radial_unit = u.kpc
+        rr = radius / r_s
 
-#         radius = radius.to(radial_unit).value if hasattr(radius, "unit") else radius
+        result = torch.log(rho_s) - gamma*torch.log(rr) + ((gamma - beta) * alpha) * torch.log(1 + rr **  1/alpha)
 
-#         r_s =  r_s.to(radial_unit).value if hasattr(radius, "unit") else radius
-
-#         rho_s =  rho_s.to("TeV / cm3").value if hasattr(rho_s, "unit") else radius
-
-#         rr = radius / r_s
-
-#         result = np.log(rho_s) - gamma*np.log(rr) + ((gamma - beta) * alpha) * np.log(1 + rr **  1/alpha)
-
-#         return result
+        return result
     
-#     def __init__(self, 
-#                  default_alpha: float | int = 1, 
-#                  default_beta: float | int = 3, 
-#                  default_gamma: float | int = 1, 
-#                  default_rho_s: float = 0.001* u.Unit("TeV / cm3"), 
-#                  default_r_s: float = 24.42* u.Unit("kpc"),
-#                 *args, **kwargs):
-#         """
-#         Initializes the GNFW_Profile class.
+    def __init__(self, 
+                 alpha= torch.tensor(1.), 
+                 beta= torch.tensor(3.), 
+                 gamma= torch.tensor(1.), 
+                 rho_s= torch.tensor(0.001), # u.Unit(TeV / cm3)", 
+                 r_s= torch.tensor(24.42), #* u.Unit("kpc"),
+                *args, **kwargs):
+        """
+        Initializes the GNFW_Profile class.
 
-#         Args:
-#             default_alpha (float | int, optional): Default alpha parameter. Defaults to 1.
-#             default_beta (float | int, optional): Default beta parameter. Defaults to 3.
-#             default_gamma (float | int, optional): Default gamma parameter. Defaults to 1.
-#             default_rho_s (float, optional): Default scale density. Defaults to 0.001 * u.Unit("TeV / cm3").
-#             default_r_s (float, optional): Default scale radius. Defaults to 24.42 * u.Unit("kpc").
-#         """
-#         super().__init__(
-#             log_profile_func=self.log_profile, 
-#             kwd_profile_default_vals = {'r_s': default_r_s, 
-#                                         'alpha': default_alpha, 
-#                                         'beta': default_beta,
-#                                         'gamma': default_gamma,
-#                                         'rho_s':default_rho_s},
-#             gammapy_profile_class=Gammapy_GNFWProfile,
-#             *args, **kwargs
-#         )
+        Args:
+            default_alpha (float | int, optional): Default alpha parameter. Defaults to 1.
+            default_beta (float | int, optional): Default beta parameter. Defaults to 3.
+            default_gamma (float | int, optional): Default gamma parameter. Defaults to 1.
+            default_rho_s (float, optional): Default scale density. Defaults to 0.001 ("TeV / cm3").
+            default_r_s (float, optional): Default scale radius. Defaults to 24.42 ("kpc").
+        """
+        super().__init__(
+            log_profile_func=self.log_density_profile_func, 
+            alpha=alpha, 
+            beta=beta,
+            gamma=gamma,
+            rho_s=rho_s,
+            r_s=r_s,
+            *args, **kwargs
+        )
 
 
 
