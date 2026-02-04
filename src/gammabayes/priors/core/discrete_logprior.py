@@ -3,7 +3,7 @@ import pyro
 import pyro.distributions as dist
 from torch.distributions import constraints
 from torch.distributions import Categorical
-
+import numpy as np
 
 class DiscreteLogPrior:
     arg_constraints = {}
@@ -141,7 +141,7 @@ class DiscreteLogPrior:
         return torch.logsumexp(log_prior_values, dim=dims)
 
 
-    def peek(self, pcm_kwargs={}, plot_kwargs={}, fig_kwargs = {}, **params):
+    def peek(self, fig=None, axes=None, pcm_kwargs={}, plot_kwargs={}, fig_kwargs = {}, **params):
         if 'norm' not in pcm_kwargs:
             pcm_kwargs['norm'] = 'log'
 
@@ -158,20 +158,28 @@ class DiscreteLogPrior:
 
         full_mat = self.eval_log_on_geom(**params)
 
-        energy_mat = torch.logsumexp(full_mat, dim=(1,2)).exp()
-        lonlat_mat = torch.logsumexp(full_mat, dim=0).exp()
+        energy_mat = torch.logsumexp(full_mat, dim=(1,2)).exp().detach().cpu().numpy()
+        lonlat_mat = torch.logsumexp(full_mat, dim=0).exp().detach().cpu().numpy()
 
-        fig, axes = plt.subplots(2, 2, **fig_kwargs)
+        plotting_energy_axis = self.binning_geometry.energy_axis.clone().detach().cpu().numpy()
+        plotting_lon_axis = self.binning_geometry.lon_axis.clone().detach().cpu().numpy()
+        plotting_lat_axis = self.binning_geometry.lat_axis.clone().detach().cpu().numpy()
 
-        axes = axes.flatten()
+        if fig is None or axes is None:
+            fig, axes = plt.subplots(2, 2, **fig_kwargs)
 
-        axes[0].plot(self.binning_geometry.energy_axis, energy_mat)
+            axes = axes.flatten()
+
+
+        full_mat = full_mat.detach().cpu().numpy()
+
+        axes[0].plot(plotting_energy_axis, energy_mat)
         axes[0].set(
             xlabel="True Energy [TeV]",
             **plot_kwargs
         )
 
-        pcm = axes[1].pcolormesh(*self.binning_geometry.spatial_axes, lonlat_mat.T, **pcm_kwargs)
+        pcm = axes[1].pcolormesh(plotting_lon_axis, plotting_lat_axis, lonlat_mat.T, **pcm_kwargs)
 
         plt.colorbar(pcm, ax=axes[1])
         axes[1].set(
@@ -181,13 +189,13 @@ class DiscreteLogPrior:
         )
 
 
-        axes[2].plot(self.binning_geometry.energy_axis, full_mat.exp()[:, full_mat.shape[1]//2, full_mat.shape[2]//2,])
+        axes[2].plot(plotting_energy_axis, np.exp(full_mat[:, full_mat.shape[1]//2, full_mat.shape[2]//2,]))
         axes[2].set(
             xlabel="True Energy [TeV]",
             **plot_kwargs
         )
 
-        pcm = axes[3].pcolormesh(*self.binning_geometry.spatial_axes, full_mat.exp()[torch.abs(self.binning_geometry.energy_axis - 1.).argmin(), :, :].T, **pcm_kwargs)
+        pcm = axes[3].pcolormesh(plotting_lon_axis, plotting_lat_axis, np.exp(full_mat[np.abs(plotting_energy_axis - 1.).argmin(), :, :].T), **pcm_kwargs)
 
         plt.colorbar(pcm, ax=axes[3])
         axes[3].set(

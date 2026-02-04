@@ -105,9 +105,12 @@ class IRFExtractor(object):
 
     def log_aeff(self, energy, lon, lat, pointing_dir=torch.tensor([0,0]), parameters={}):
 
-        result = torch.tensor(self.aeff_default.evaluate(energy_true = energy*u.TeV, 
-                                offset=haversine(
-                                    lon, lat, pointing_dir[0], pointing_dir[1])*u.deg).to(self.aeff_units).value).log()
+
+        energy_temp = energy.detach().cpu().numpy()
+        offsets = haversine(lon, lat, pointing_dir[0], pointing_dir[1]).detach().cpu().numpy()*u.deg
+
+        result = torch.tensor(self.aeff_default.evaluate(energy_true = energy_temp*u.TeV, 
+                                offset=offsets).to(self.aeff_units).value).log()
 
         result = torch.where(torch.isneginf(result), -100, result)
 
@@ -198,11 +201,13 @@ class IRFExtractor(object):
             float: Natural log of the charged cosmic ray mis-identification rate for the CTA.
         """
 
-        offset  = haversine(lon, lat, pointing_dir[0], pointing_dir[1])
+        offset  = haversine(lon, lat, pointing_dir[0], pointing_dir[1]).detach().cpu().numpy()
+        energy_temp = energy.detach().cpu().numpy()
 
 
 
-        return torch.tensor(self.CCR_BKG.evaluate(energy=energy*u.TeV, offset=offset*u.deg).to(self.CCR_BKG_units).value).log()
+
+        return torch.tensor(self.CCR_BKG.evaluate(energy=energy_temp*u.TeV, offset=offset*u.deg).to(self.CCR_BKG_units).value).log()
     
 
     

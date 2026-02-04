@@ -131,59 +131,88 @@ class LogSumExpConv3D(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Initial steps remain
-        x = x.squeeze()
-        in_D, in_H, in_W = x.shape
+        if x.dim() == 3:
+            x = x.unsqueeze(0).unsqueeze(0) # (1, 1, D, H, W)
+        elif x.dim() == 4:
+            x = x.unsqueeze(1) # (N, 1, D, H, W)        in_D, in_H, in_W = x.shape
+            
+        batch_size, channels, in_D, in_H, in_W = x.shape
 
         out_D = self._calc_output_dim(in_D, self.kernel_size[0], self.padding[0], self.stride[0])
         out_H = self._calc_output_dim(in_H, self.kernel_size[1], self.padding[1], self.stride[1])
         out_W = self._calc_output_dim(in_W, self.kernel_size[2], self.padding[2], self.stride[2])
 
-        padded_x = F.pad(x.unsqueeze(0).unsqueeze(0), # Add N and C dimensions (1, 1, D, H, W)
-                         (self.padding[2], self.padding[2],
-                          self.padding[1], self.padding[1],
-                          self.padding[0], self.padding[0]),
-                         mode='constant', value=float('-inf')).squeeze() # Remove N, C
-
-        conved_output = torch.empty(size=(out_D, out_H, out_W), device=x.device, dtype=x.dtype)
+        # 3. Padding: Use F.pad on (N, C, D, H, W) input
+        padded_x = F.pad(x, (self.padding[2], self.padding[2], # W
+                              self.padding[1], self.padding[1], # H
+                              self.padding[0], self.padding[0]), # D
+                         mode='constant', value=float('-inf'))
+        # We will work with the squeezed version (N, D_pad, H_pad, W_pad)
+        padded_x_squeezed = padded_x.squeeze(1) 
+        
+        conved_output = torch.empty(size=(batch_size, out_D, out_H, out_W), 
+                                    device=x.device, dtype=x.dtype)
         
         k_d, k_h, k_w = self.kernel_size
-        s_d, s_h, s_w = self.stride
-        
+        s_d, s_h, s_w = self.stride        
         
         for convi in range(out_D): 
             
             d_start = convi * s_d
-            # Slice correction factor
+            
+            # Precompute and normalise matrix 
+            # This step is the log-domain integral/normalization and must be done inside the loop.
             log_delta_E_slice = self.log_width_correction[d_start : d_start + k_d]
-            log_delta_E_broadcast = log_delta_E_slice[:, None, None]
-            precomp_weightmat = log_delta_E_broadcast + self.weight
+            # (k_d, 1, 1) + (k_d, k_h, k_w) -> (k_d, k_h, k_w)
+            log_delta_E_broadcast = log_delta_E_slice[:, None, None] 
+            
+            # Apply the log(Delta E) correction
+            precomp_weightmat = log_delta_E_broadcast + self.weight 
 
+            # Normalize the kernel: log(W') = log(W) - log(sum(W))
+            # The sum is over the entire kernel volume (k_d, k_h, k_w)
             precomp_weightmat -= torch.logsumexp(precomp_weightmat, dim=(0, 1, 2))
             
-            # Reshape precomp_weightmat for broadcasting (k_d * k_h * k_w)
-            precomp_weightmat_flat = precomp_weightmat.flatten()[:, None] 
+            # Reshape precomp_weightmat for broadcasting: (k_d * k_h * k_w)
+            # add an N dimension (N, K^3, 1) and will broadcast over the batch
+            precomp_weightmat_flat = precomp_weightmat.flatten()[None, :, None] # (1, K^3, 1)
 
-            # --- Extract Patches for this D-slice over H and W ---
-            padded_x_slice = padded_x[d_start : d_start + k_d, :, :] # (k_d, H_padded, W_padded)
+            # Extract Patches for this D-slice over H and W for *all* batches
+            # (N, k_d, H_padded, W_padded)
+            padded_x_slice = padded_x_squeezed[:, d_start : d_start + k_d, :, :] 
             
-            view_shape = (k_d, out_H, k_h, out_W, k_w)
+            # Target View Shape: (N, k_d, out_H, k_h, out_W, k_w)
+            view_shape = (batch_size, k_d, out_H, k_h, out_W, k_w)
             
-            s_p = padded_x_slice.stride()
-            view_strides = (s_p[0], s_p[1] * s_h, s_p[1], s_p[2] * s_w, s_p[2])
+            # Get strides for N, D, H, W_padded
+            s_n, s_d_pad, s_h_pad, s_w_pad = padded_x_squeezed.stride()
+            
+            # Target Strides: (N stride, D stride, Output H stride, Kernel H stride, Output W stride, Kernel W stride)
+            view_strides = (s_n, s_d_pad, 
+                            s_h_pad * s_h, s_h_pad, 
+                            s_w_pad * s_w, s_w_pad)
             
             all_patches_view = padded_x_slice.as_strided(view_shape, view_strides)
-            all_patches = all_patches_view.permute(0, 2, 4, 1, 3).flatten(0, 2).flatten(1) # (K^3, out_H * out_W)
+            
+            # Reshape to (N, K_D, K_H, K_W, out_H, out_W) -> (N, K^3, out_H * out_W)
+            # N is the first dimension. K^3 is the dimension to be logsumexp-ed.
+            all_patches = all_patches_view.permute(0, 1, 3, 5, 2, 4).flatten(1, 3).flatten(2, 3)
+            # Output Shape: (N, K^3, out_H * out_W)
 
+            # 6. Log-Sum-Exp Operation
+            # (N, K^3, out_H*out_W) + (1, K^3, 1) -> (N, K^3, out_H*out_W)
             sum_terms = all_patches + precomp_weightmat_flat
             
-            logsumexp_result = torch.logsumexp(sum_terms, dim=0) # (out_H * out_W)
+            # logsumexp over K^3 dimension (dim=1)
+            logsumexp_result = torch.logsumexp(sum_terms, dim=1) # (N, out_H * out_W)
             
-            # Store result: (out_H * out_W) -> (out_H, out_W)
-            conved_output[convi, :, :] = logsumexp_result.view(out_H, out_W)
+            # 7. Store Result: (N, out_H * out_W) -> (N, out_H, out_W)
+            conved_output[:, convi, :, :] = logsumexp_result.view(batch_size, out_H, out_W)
 
 
-        return conved_output
+        return conved_output.squeeze(1) # Squeeze the single channel dimension if desired
 
+        
     def peek(self, norm='log', vmin=None, vmax=None, *args, **kwargs):
         import numpy as np
         from matplotlib import pyplot as plt

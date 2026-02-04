@@ -8,7 +8,17 @@ def make_normal_kernel_with_std_and_bins(linear_axis, std, confidence_clearance=
 
     num_bins = int(confidence_clearance*std/bin_width)
 
+
+    annoying=False
+    if num_bins%2 ==0:
+        annoying=True
+        num_bins += 1
+
     kernel_pseudo_axis = torch.arange(-num_bins*bin_width, (num_bins+1)*bin_width, bin_width)
+
+    if 2* num_bins + 1 != len(kernel_pseudo_axis) and annoying:
+        kernel_pseudo_axis = kernel_pseudo_axis[:-1]
+
 
     base_normal_dist = Normal(loc=torch.tensor(0.), scale=std)
 
