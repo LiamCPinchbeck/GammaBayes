@@ -75,7 +75,7 @@ class LogSumExpConv3D(nn.Module):
         """Calculates a single output dimension."""
         return (input_dim + 2 * padding_dim - kernel_dim) // stride_dim + 1
 
-    def oldforward(self, x: torch.Tensor) -> torch.Tensor:
+    def superoldforward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Performs the log-sum-exp 3D convolution.
 
@@ -212,6 +212,79 @@ class LogSumExpConv3D(nn.Module):
 
         return conved_output.squeeze(1) # Squeeze the single channel dimension if desired
 
+
+
+    # def forward(self, x: torch.Tensor, spatial_chunk_size=5) -> torch.Tensor:
+    #     if x.dim() == 3:
+    #         x = x.unsqueeze(0).unsqueeze(0)
+    #     elif x.dim() == 4:
+    #         x = x.unsqueeze(1)
+            
+    #     batch_size, channels, in_D, in_H, in_W = x.shape
+
+    #     out_D = self._calc_output_dim(in_D, self.kernel_size[0], self.padding[0], self.stride[0])
+    #     out_H = self._calc_output_dim(in_H, self.kernel_size[1], self.padding[1], self.stride[1])
+    #     out_W = self._calc_output_dim(in_W, self.kernel_size[2], self.padding[2], self.stride[2])
+
+    #     padded_x = F.pad(x, (self.padding[2], self.padding[2],
+    #                         self.padding[1], self.padding[1],
+    #                         self.padding[0], self.padding[0]),
+    #                     mode='constant', value=float('-inf'))
+    #     padded_x_squeezed = padded_x.squeeze(1)
+        
+    #     k_d, k_h, k_w = self.kernel_size
+    #     s_d, s_h, s_w = self.stride
+        
+    #     # # If no spatial chunking requested, use full spatial extent
+    #     # if spatial_chunk_size is None:
+    #     #     spatial_chunk_size = out_H  # No chunking
+        
+    #     conved_output = torch.empty(
+    #         size=(batch_size, out_D, out_H, out_W),
+    #         device=x.device, dtype=x.dtype)
+        
+    #     for convi in range(out_D):
+    #         d_start = convi * s_d
+            
+    #         # Precompute normalised kernel for this energy slice
+    #         log_delta_E_slice = self.log_width_correction[d_start : d_start + k_d]
+    #         precomp_weightmat = log_delta_E_slice[:, None, None] + self.weight
+    #         precomp_weightmat -= torch.logsumexp(precomp_weightmat, dim=(0, 1, 2))
+            
+    #         # Extract the energy slice from padded input
+    #         padded_x_slice = padded_x_squeezed[:, d_start : d_start + k_d, :, :]
+            
+    #         # Chunk over spatial H dimension
+    #         for h_start in range(0, out_H, spatial_chunk_size):
+    #             h_end = min(h_start + spatial_chunk_size, out_H)
+    #             h_chunk = h_end - h_start
+                
+    #             # Extract just the spatial rows we need (with kernel padding)
+    #             h_pad_start = h_start * s_h
+    #             h_pad_end = h_pad_start + (h_chunk - 1) * s_h + k_h
+                
+    #             # Shape: (N, k_d, h_needed, W_padded)
+    #             spatial_slice = padded_x_slice[:, :, h_pad_start:h_pad_end, :]
+                
+    #             # Build patches for this spatial chunk
+    #             # Shape: (N, k_d, h_chunk, k_h, out_W, k_w)
+    #             s_n, s_d2, s_h2, s_w2 = spatial_slice.stride()
+    #             view_shape = (batch_size, k_d, h_chunk, k_h, out_W, k_w)
+    #             view_strides = (s_n, s_d2, s_h2 * s_h, s_h2, s_w2 * s_w, s_w2)
+                
+    #             patches = spatial_slice.as_strided(view_shape, view_strides)
+                
+    #             # (N, k_d, k_h, k_w, h_chunk, out_W) -> (N, K^3, h_chunk * out_W)
+    #             patches = patches.permute(0, 1, 3, 5, 2, 4).flatten(1, 3).flatten(2, 3)
+                
+    #             # Apply kernel and logsumexp
+    #             weightmat_flat = precomp_weightmat.flatten()[None, :, None]
+    #             result = torch.logsumexp(patches + weightmat_flat, dim=1)
+                
+    #             conved_output[:, convi, h_start:h_end, :] = result.view(
+    #                 batch_size, h_chunk, out_W)
+        
+    #     return conved_output.squeeze(1)
         
     def peek(self, norm='log', vmin=None, vmax=None, *args, **kwargs):
         import numpy as np

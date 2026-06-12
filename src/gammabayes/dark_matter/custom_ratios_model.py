@@ -106,8 +106,6 @@ class CustomDMRatiosModel(TwoCompFluxPrior):
 
 
 
-
-
         
     def __iter__(self):
         """
