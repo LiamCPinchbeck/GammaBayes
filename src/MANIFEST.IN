@@ -2,6 +2,14 @@ include gammabayes/package_data/*.gz
 include gammabayes/package_data/*.txt
 include gammabayes/package_data/*.fits
 include gammabayes/dark_matter/channel_spectra/PPPC_Tables/*
+include gammabayes/dark_matter/channel_spectra/PPPC_Tables/AtProduction-Gamma_COSMIXs.dat
+include gammabayes/dark_matter/channel_spectra/PPPC_Tables/AtProduction_gamma_EW_corrections.dat
+include gammabayes/dark_matter/channel_spectra/QCDUNC_Tables/AtProduction-Ga-Combined-Up-QCDUNC
+include gammabayes/dark_matter/channel_spectra/CosmiXs_Tables/*
+include gammabayes/dark_matter/channel_spectra/CosmiXs_Tables/AtProduction-Gamma_COSMIXs.dat
+include gammabayes/dark_matter/CosmiXs_Tables/CosmiXs_Tables/AtProduction-Gamma_COSMIXs.dat
+include gammabayes/dark_matter/channel_spectra/QCDUNC_Tables/*
+include gammabayes/dark_matter/QCDUNC_Tables/*
 include gammabayes/dark_matter/220913_145357/bfmlambdaarray.npy
 include gammabayes/dark_matter/220913_145357/lambdarange.npy
 include gammabayes/dark_matter/220913_145357/massrange.npy

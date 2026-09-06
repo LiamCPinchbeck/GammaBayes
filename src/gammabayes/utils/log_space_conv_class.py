@@ -143,36 +143,56 @@ class LogSumExpConv3D(nn.Module):
         out_W = self._calc_output_dim(in_W, self.kernel_size[2], self.padding[2], self.stride[2])
 
         # 3. Padding: Use F.pad on (N, C, D, H, W) input
-        padded_x = F.pad(x, (self.padding[2], self.padding[2], # W
-                              self.padding[1], self.padding[1], # H
-                              self.padding[0], self.padding[0]), # D
-                         mode='constant', value=float('-inf'))
+        pad_spec = (self.padding[2], self.padding[2], # W
+                    self.padding[1], self.padding[1], # H
+                    self.padding[0], self.padding[0]) # D
+        padded_x = F.pad(x, pad_spec, mode='constant', value=float('-inf'))
         # We will work with the squeezed version (N, D_pad, H_pad, W_pad)
-        padded_x_squeezed = padded_x.squeeze(1) 
-        
+        padded_x_squeezed = padded_x.squeeze(1)
+
+        # ── Position-based validity volume (the fix for clearance-dependence) ──
+        # 0 (= log 1) on real input bins, -inf on padding. Each output bin is
+        # renormalised by the kernel weight that actually lands on IN-DOMAIN
+        # input (the "live" weight), NOT by the full kernel sum. Near the FoV
+        # boundary part of the kernel falls on padding; normalising by the full
+        # sum (the old behaviour) silently dropped that weight, and the size of
+        # the dropped fraction grew with the kernel — i.e. with the clearance —
+        # so changing the IRF clearance shifted the forward model. Renormalising
+        # by the live weight makes interior bins identical to before and makes
+        # the boundary a well-defined, clearance-stable weighted average.
+        #
+        # This MUST be position-based: a genuine zero-rate bin is log(0) = -inf
+        # in the data, identical in value to padding, so a value-based mask would
+        # wrongly drop real empty bins from the normaliser and inflate them.
+        valid_vol = x.new_zeros((1, 1, in_D, in_H, in_W))
+        padded_valid = F.pad(valid_vol, pad_spec, mode='constant', value=float('-inf'))[0, 0]
+        # (D_pad, H_pad, W_pad)
+
         conved_output = torch.empty(size=(batch_size, out_D, out_H, out_W), 
                                     device=x.device, dtype=x.dtype)
         
         k_d, k_h, k_w = self.kernel_size
         s_d, s_h, s_w = self.stride        
-        
+
+        # Strides for the strided patch views (constant across the D-loop)
+        s_n, s_d_pad, s_h_pad, s_w_pad = padded_x_squeezed.stride()
+        vs_d, vs_h, vs_w = padded_valid.stride()
+
         for convi in range(out_D): 
             
             d_start = convi * s_d
             
-            # Precompute and normalise matrix 
-            # This step is the log-domain integral/normalization and must be done inside the loop.
+            # Precompute matrix
+            # This step is the log-domain integral and must be done inside the loop.
             log_delta_E_slice = self.log_width_correction[d_start : d_start + k_d]
             # (k_d, 1, 1) + (k_d, k_h, k_w) -> (k_d, k_h, k_w)
             log_delta_E_broadcast = log_delta_E_slice[:, None, None] 
             
-            # Apply the log(Delta E) correction
+            # Apply the log(Delta E) correction. NOTE: the kernel is left
+            # UN-normalised here; normalisation is now per-output-bin against the
+            # live weight (see below) instead of a single full-window logsumexp.
             precomp_weightmat = log_delta_E_broadcast + self.weight 
 
-            # Normalize the kernel: log(W') = log(W) - log(sum(W))
-            # The sum is over the entire kernel volume (k_d, k_h, k_w)
-            precomp_weightmat -= torch.logsumexp(precomp_weightmat, dim=(0, 1, 2))
-            
             # Reshape precomp_weightmat for broadcasting: (k_d * k_h * k_w)
             # add an N dimension (N, K^3, 1) and will broadcast over the batch
             precomp_weightmat_flat = precomp_weightmat.flatten()[None, :, None] # (1, K^3, 1)
@@ -184,9 +204,6 @@ class LogSumExpConv3D(nn.Module):
             # Target View Shape: (N, k_d, out_H, k_h, out_W, k_w)
             view_shape = (batch_size, k_d, out_H, k_h, out_W, k_w)
             
-            # Get strides for N, D, H, W_padded
-            s_n, s_d_pad, s_h_pad, s_w_pad = padded_x_squeezed.stride()
-            
             # Target Strides: (N stride, D stride, Output H stride, Kernel H stride, Output W stride, Kernel W stride)
             view_strides = (s_n, s_d_pad, 
                             s_h_pad * s_h, s_h_pad, 
@@ -195,16 +212,35 @@ class LogSumExpConv3D(nn.Module):
             all_patches_view = padded_x_slice.as_strided(view_shape, view_strides)
             
             # Reshape to (N, K_D, K_H, K_W, out_H, out_W) -> (N, K^3, out_H * out_W)
-            # N is the first dimension. K^3 is the dimension to be logsumexp-ed.
             all_patches = all_patches_view.permute(0, 1, 3, 5, 2, 4).flatten(1, 3).flatten(2, 3)
             # Output Shape: (N, K^3, out_H * out_W)
 
+            # Matching validity patches (no batch dim): (1, K^3, out_H * out_W)
+            valid_slice = padded_valid[d_start : d_start + k_d, :, :]
+            v_view_shape = (k_d, out_H, k_h, out_W, k_w)
+            v_view_strides = (vs_d, vs_h * s_h, vs_h, vs_w * s_w, vs_w)
+            valid_patches = valid_slice.as_strided(v_view_shape, v_view_strides) \
+                                       .permute(0, 2, 4, 1, 3).flatten(0, 2).flatten(1, 2)[None]
+            # (1, K^3, out_H * out_W)  -- 0 where the tap is in-domain, -inf on padding
+
             # 6. Log-Sum-Exp Operation
-            # (N, K^3, out_H*out_W) + (1, K^3, 1) -> (N, K^3, out_H*out_W)
-            sum_terms = all_patches + precomp_weightmat_flat
-            
-            # logsumexp over K^3 dimension (dim=1)
-            logsumexp_result = torch.logsumexp(sum_terms, dim=1) # (N, out_H * out_W)
+            # Numerator:  log Σ_j W_j x_{i+j}.  Padding (and genuine zero-rate)
+            # taps are -inf in all_patches, so they contribute exp(-inf)=0.
+            numerator = torch.logsumexp(all_patches + precomp_weightmat_flat, dim=1)  # (N, out_H*out_W)
+
+            # Denominator: log Σ_{j in-domain} W_j  (live weight; position-based,
+            # so real zero-rate bins still count, only padding is excluded).
+            log_live_weight = torch.logsumexp(precomp_weightmat_flat + valid_patches, dim=1)  # (1, out_H*out_W)
+
+            logsumexp_result = numerator - log_live_weight  # (N, out_H*out_W)
+
+            # Guard a fully-padded column (no live weight): -inf - -inf -> nan.
+            # Set to -inf (zero rate). Cannot occur for valid outputs when
+            # padding = kernel_size // 2, but is kept for general stride/padding.
+            logsumexp_result = torch.where(
+                torch.isneginf(log_live_weight),
+                torch.full_like(logsumexp_result, float('-inf')),
+                logsumexp_result)
             
             # 7. Store Result: (N, out_H * out_W) -> (N, out_H, out_W)
             conved_output[:, convi, :, :] = logsumexp_result.view(batch_size, out_H, out_W)
@@ -215,76 +251,18 @@ class LogSumExpConv3D(nn.Module):
 
 
     # def forward(self, x: torch.Tensor, spatial_chunk_size=5) -> torch.Tensor:
+    #     # NOTE: if re-enabling this memory-chunked variant, apply the SAME
+    #     # live-weight (position-based) normalisation as forward() above:
+    #     # build a padded validity volume (0 in-domain, -inf on padding), take the
+    #     # matching patches per chunk, and divide the numerator logsumexp by
+    #     # logsumexp(precomp_weightmat + valid_patches) instead of subtracting a
+    #     # single full-window logsumexp. Otherwise boundary bins become
+    #     # clearance-dependent again.
     #     if x.dim() == 3:
     #         x = x.unsqueeze(0).unsqueeze(0)
     #     elif x.dim() == 4:
     #         x = x.unsqueeze(1)
-            
-    #     batch_size, channels, in_D, in_H, in_W = x.shape
-
-    #     out_D = self._calc_output_dim(in_D, self.kernel_size[0], self.padding[0], self.stride[0])
-    #     out_H = self._calc_output_dim(in_H, self.kernel_size[1], self.padding[1], self.stride[1])
-    #     out_W = self._calc_output_dim(in_W, self.kernel_size[2], self.padding[2], self.stride[2])
-
-    #     padded_x = F.pad(x, (self.padding[2], self.padding[2],
-    #                         self.padding[1], self.padding[1],
-    #                         self.padding[0], self.padding[0]),
-    #                     mode='constant', value=float('-inf'))
-    #     padded_x_squeezed = padded_x.squeeze(1)
-        
-    #     k_d, k_h, k_w = self.kernel_size
-    #     s_d, s_h, s_w = self.stride
-        
-    #     # # If no spatial chunking requested, use full spatial extent
-    #     # if spatial_chunk_size is None:
-    #     #     spatial_chunk_size = out_H  # No chunking
-        
-    #     conved_output = torch.empty(
-    #         size=(batch_size, out_D, out_H, out_W),
-    #         device=x.device, dtype=x.dtype)
-        
-    #     for convi in range(out_D):
-    #         d_start = convi * s_d
-            
-    #         # Precompute normalised kernel for this energy slice
-    #         log_delta_E_slice = self.log_width_correction[d_start : d_start + k_d]
-    #         precomp_weightmat = log_delta_E_slice[:, None, None] + self.weight
-    #         precomp_weightmat -= torch.logsumexp(precomp_weightmat, dim=(0, 1, 2))
-            
-    #         # Extract the energy slice from padded input
-    #         padded_x_slice = padded_x_squeezed[:, d_start : d_start + k_d, :, :]
-            
-    #         # Chunk over spatial H dimension
-    #         for h_start in range(0, out_H, spatial_chunk_size):
-    #             h_end = min(h_start + spatial_chunk_size, out_H)
-    #             h_chunk = h_end - h_start
-                
-    #             # Extract just the spatial rows we need (with kernel padding)
-    #             h_pad_start = h_start * s_h
-    #             h_pad_end = h_pad_start + (h_chunk - 1) * s_h + k_h
-                
-    #             # Shape: (N, k_d, h_needed, W_padded)
-    #             spatial_slice = padded_x_slice[:, :, h_pad_start:h_pad_end, :]
-                
-    #             # Build patches for this spatial chunk
-    #             # Shape: (N, k_d, h_chunk, k_h, out_W, k_w)
-    #             s_n, s_d2, s_h2, s_w2 = spatial_slice.stride()
-    #             view_shape = (batch_size, k_d, h_chunk, k_h, out_W, k_w)
-    #             view_strides = (s_n, s_d2, s_h2 * s_h, s_h2, s_w2 * s_w, s_w2)
-                
-    #             patches = spatial_slice.as_strided(view_shape, view_strides)
-                
-    #             # (N, k_d, k_h, k_w, h_chunk, out_W) -> (N, K^3, h_chunk * out_W)
-    #             patches = patches.permute(0, 1, 3, 5, 2, 4).flatten(1, 3).flatten(2, 3)
-                
-    #             # Apply kernel and logsumexp
-    #             weightmat_flat = precomp_weightmat.flatten()[None, :, None]
-    #             result = torch.logsumexp(patches + weightmat_flat, dim=1)
-                
-    #             conved_output[:, convi, h_start:h_end, :] = result.view(
-    #                 batch_size, h_chunk, out_W)
-        
-    #     return conved_output.squeeze(1)
+    #     ...
         
     def peek(self, norm='log', vmin=None, vmax=None, *args, **kwargs):
         import numpy as np

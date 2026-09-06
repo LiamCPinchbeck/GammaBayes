@@ -23,20 +23,22 @@ class DM_Profile(BaseSpatial_PriorComp):
                  *args, **kwargs
                  ):
 
-        self._log_profile_func          = log_profile_func
-        self.LOCAL_DENSITY              = LOCAL_DENSITY
-        self.DISTANCE                   = dist_to_source
-        self.annihilation               = annihilation
-
-        self.rho_s                      = rho_s
-        self.angular_central_coords     = angular_central_coords
-
+        self._log_profile_func = log_profile_func
         self.int_resolution = int_resolution
         self.t_range = torch.linspace(0, 4, self.int_resolution)
-        self.deltat = self.t_range[1]-self.t_range[0]
+        self.deltat = self.t_range[1] - self.t_range[0]
 
-        
-        self.log_integral_constants = torch.log( self.deltat  * self.d_kpc_to_cm * self.sr_to_deg2)
+        _dev = self.t_range.device
+        self.LOCAL_DENSITY = torch.as_tensor(LOCAL_DENSITY).to(_dev)
+        self.DISTANCE      = torch.as_tensor(dist_to_source).to(_dev)
+        self.annihilation  = torch.as_tensor(annihilation).to(_dev)
+        self.rho_s         = torch.as_tensor(rho_s).to(_dev)
+        self.angular_central_coords = torch.as_tensor(angular_central_coords).to(_dev)
+        self.d_kpc_to_cm   = self.d_kpc_to_cm.to(_dev)
+        self.sr_to_deg2    = self.sr_to_deg2.to(_dev)
+
+        self.log_integral_constants = torch.log(self.deltat * self.d_kpc_to_cm * self.sr_to_deg2)
+        self.log_integral_constants = self.log_integral_constants.to(self.DISTANCE.device)
 
         self.log_profile_func = self.scale_density_profile_to_refs(
             ref_density= self.LOCAL_DENSITY, ref_density_radius = self.DISTANCE, 
@@ -90,14 +92,16 @@ class DM_Profile(BaseSpatial_PriorComp):
         vel_dirvecs = torch.stack([self.DISTANCE*torch.tan(theta_rad), self.DISTANCE*torch.ones_like(theta_rad)], dim=0)
 
         # Calculate positions along the lines of sight:  p_ref + t*dir(p)
-        positions = torch.tensor([0, -self.DISTANCE])[:, None, None] + self.t_range[None, None, :]*vel_dirvecs[:, :, None]
+        positions = torch.stack([torch.zeros_like(self.DISTANCE), -self.DISTANCE])[:, None, None] + self.t_range[None, None, :]*vel_dirvecs[:, :, None]
 
         # Calculate the radii of the positions along the lines of sight
         radii = torch.sqrt((positions**2).sum(dim=(0)))
 
-        # Calculate adjusted densities along lines of sight
-        log_densities_to_integrate = (1.+self.annihilation)*self.log_profile_func(radii, **kwargs)
-
+        # Re-anchor rho(r_sun) = LOCAL_DENSITY for the CURRENT shape kwargs (r_s, gamma, ...).
+        # Exactly 0 when kwargs empty (init scaling), so back-compatible.
+        log_norm_corr = torch.log(self.LOCAL_DENSITY) - self.log_profile_func(self.DISTANCE, **kwargs)
+        log_densities_to_integrate = (1.+self.annihilation)*(self.log_profile_func(radii, **kwargs) + log_norm_corr)
+        
         # Integrate and return
         return torch.logsumexp(log_densities_to_integrate + torch.log(dsdt[:, None]), dim=1) + self.log_integral_constants
 

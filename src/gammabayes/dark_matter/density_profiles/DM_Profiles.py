@@ -78,7 +78,7 @@ class GNFW_Profile(DM_Profile):
         
         rr = radius / r_s
 
-        result = torch.log(rho_s) - gamma*torch.log(rr) + ((gamma - beta) * alpha) * torch.log(1 + rr **  1/alpha)
+        result = torch.log(rho_s) - gamma*torch.log(rr) + ((gamma - beta) * alpha) * torch.log(1 + rr **  (1/alpha))
 
         return result
     
