@@ -3,6 +3,7 @@ from functools import partial
 from gammabayes.priors import TwoCompFluxPrior
 from gammabayes.dark_matter import PPPCReader, SingleDMSpectralComp
 from gammabayes.dark_matter.density_profiles import DM_Profile, Einasto_Profile
+from gammabayes.core.batching import as_param
 
 
 class SingleChannelDMPrior(TwoCompFluxPrior):
@@ -24,8 +25,8 @@ class SingleChannelDMPrior(TwoCompFluxPrior):
             mass=mass
         )
 
-        if spatial_profile_kwargs is not None:
-            spatial_profile = spatial_profile(**spatial_profile_kwargs)
+        if isinstance(spatial_profile, type):          # a profile CLASS -> instantiate (defaults if no kwargs)
+            spatial_profile = spatial_profile(**(spatial_profile_kwargs or {}))
 
         self.spatial_comp = spatial_profile
 
@@ -44,11 +45,12 @@ class SingleChannelDMPrior(TwoCompFluxPrior):
         )
 
 
-    def _spectral_comp_logfunc(self, energy, mass, sigmav, symmetry_factor):
-
-        logprefactor = torch.log(sigmav*self.constant_spectral_prefactor/(symmetry_factor*mass**2))
-
-        mass = mass*torch.ones_like(energy)
-
-        return logprefactor + self._single_channel_spectral_comp(energy, mass=mass)
+    def _spectral_comp_logfunc(self, energy, mass, sigmav, symmetry_factor, kappa=None, delta=None):
+        """Batched: mass / sigmav / symmetry_factor scalar or (B,) -> (B, E)."""
+        E = torch.as_tensor(energy)
+        mass_b = as_param(mass, 1, like=E)
+        sigmav_b = as_param(sigmav, 1, like=E)
+        sym_b = as_param(symmetry_factor, 1, like=E)
+        logprefactor = torch.log(sigmav_b*self.constant_spectral_prefactor/(sym_b*mass_b**2))
+        return logprefactor + self._single_channel_spectral_comp(E, mass=mass_b[:, 0], kappa=kappa, delta=delta)
 

@@ -152,7 +152,7 @@ class GammaLogExposure:
         if isinstance(other, GammaLogExposure):
 
             if self.binning_geometry!=other.binning_geometry:
-                raise NotImplemented("Adding exposures for different binning geometries is currently not supported.")
+                raise NotImplementedError("Adding exposures for different binning geometries is currently not supported.")
 
 
             other_unit_scaling = (self.aeff_units/other.aeff_units).to("")
@@ -163,8 +163,8 @@ class GammaLogExposure:
             return GammaLogExposure(binning_geometry=self.binning_geometry, 
                                     log_exposure_map=new_exposure_map,
                                     irfs=self.irfs,
-                                    pointing_dirs= self.pointing_dirs.extend(other.pointing_dirs),
-                                    lives_times=self.live_times.extend(other.live_times),
+                                    pointing_dirs=torch.cat([self.pointing_dirs, other.pointing_dirs], 0),
+                                    live_times=torch.cat([self.live_times, other.live_times]),
                                     )
         else:
 
@@ -185,7 +185,9 @@ class GammaLogExposure:
 
             return same_as_cached
 
-        same_as_cached = torch.array_equiv(torch.sort(pointing_dirs, axis=0), torch.sort(self.pointing_dirs, axis=0))
+        a = torch.sort(torch.as_tensor(pointing_dirs), dim=0).values
+        b = torch.sort(torch.as_tensor(self.pointing_dirs), dim=0).values
+        same_as_cached = (a.shape == b.shape) and bool(torch.equal(a, b))
 
 
         return same_as_cached
@@ -214,7 +216,6 @@ class GammaLogExposure:
         log_exposure_vals = -torch.tensor(torch.inf)
 
         for pointing_dir, live_time in zip(self.pointing_dirs, self.live_times):
-            print(live_time)
             log_exposure_vals = torch.logaddexp(log_exposure_vals, self.log_aeff(*self.binning_geometry.axes_mesh, pointing_dir=pointing_dir)+torch.log(live_time)+self.log_unit_converter)
 
     
@@ -222,6 +223,9 @@ class GammaLogExposure:
             self.log_exposure_map = log_exposure_vals + torch.log(self.binning_geometry.bin_width_mat)
         else:
             self.log_exposure_map = log_exposure_vals
+        # A_eff evaluated outside its tabulated axis (e.g. a padded true-energy grid) can come back NaN:
+        # treat as zero exposure rather than poisoning every rate cube.
+        self.log_exposure_map = torch.nan_to_num(self.log_exposure_map, nan=-torch.inf)
 
         # Have to interpolate exposure not log_exposure due to possible -inf values
         self._exp_interpolator = RegularTorchInterpolator(self.binning_geometry.axes, torch.exp(self.log_exposure_map))
@@ -234,13 +238,14 @@ class GammaLogExposure:
     def add_single_exposure(self, pointing_dir, live_time):
 
 
-        self.pointing_dirs = self.pointing_dirs.append(pointing_dir)
-        self.live_times = self.live_times.append(live_time)
-
         if hasattr(live_time, "unit"):
             live_time = live_time.to(self.live_time_units)
         else:
             live_time = live_time*self.live_time_units
+
+        pointing_dir = torch.as_tensor(pointing_dir).reshape(1, -1)
+        self.pointing_dirs = torch.cat([torch.as_tensor(self.pointing_dirs).reshape(-1, pointing_dir.shape[1]), pointing_dir], 0)
+        self.live_times = torch.cat([torch.as_tensor(self.live_times).reshape(-1), torch.tensor([float(live_time.value)])])
 
 
 
@@ -259,14 +264,12 @@ class GammaLogExposure:
     def exp_interpolator(self, energy, lon, lat, *args, pointing_dirs=None, live_times=None, **kwargs):
 
         if not self._same_as_cached(pointing_dirs=pointing_dirs):
-            if torch.array(pointing_dirs).size>2:
-                self.pointing_dirs = pointing_dirs
-                self.live_times = live_times
-
+            if torch.as_tensor(pointing_dirs).numel() > 2:
+                self.pointing_dirs = torch.as_tensor(pointing_dirs)
+                self.live_times = torch.as_tensor(live_times)
                 self.refresh()
-
             else:
-                self.add_single_exposure(pointing_dir=pointing_dirs, live_times=live_times)
+                self.add_single_exposure(pointing_dir=pointing_dirs, live_time=live_times)
 
         return self._exp_interpolator((energy, lon , lat), *args, **kwargs)
         

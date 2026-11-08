@@ -3,3 +3,4 @@ from .import_utilities import dynamic_import, download_and_unpack_tar, _get_pack
 from .method_access_from_dict import MethodDict
 from .log_space_conv_class import LogSumExpConv3D
 from .interpolation import EnergySpatialTemplateInterpolator
+from .irf_forward import IRFForwardConv, bin_prob_kernel, make_forward_irf_kernels

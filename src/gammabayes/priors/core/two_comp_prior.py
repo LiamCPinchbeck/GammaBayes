@@ -1,42 +1,28 @@
-import numpy as np
-from os import path
-from gammabayes.priors.core.discrete_logprior import DiscreteLogPrior
 from gammabayes.priors.core.source_flux_prior import SourceFluxDiscreteLogPrior
-from gammabayes.core import GammaLogExposure, GammaBinning
-import time
+from gammabayes.core.batching import promote_batch
 
-from icecream import ic
 
 class TwoCompFluxPrior(SourceFluxDiscreteLogPrior):
-    def __init__(self, 
-                 spectral_comp, 
-                 spatial_comp, 
-                 *args, **kwargs
-                 ):
+    """Separable flux prior: log F(E, lon, lat) = log S(E) + log M(lon, lat).
 
+    ``spectral_comp(energy, **spectral_params)`` -> ``(B1, E)`` and
+    ``spatial_comp(lonlat, **spatial_params)`` -> ``(B2, lon, lat)`` are
+    combined by broadcasting, so ``B1, B2 in {1, B}``.  Output ``(B, E, lon, lat)``.
+    """
 
-        self.spectral_comp    = spectral_comp
-        self.spatial_comp     = spatial_comp
+    def __init__(self, spectral_comp, spatial_comp, *args, **kwargs):
+        self.spectral_comp = spectral_comp
+        self.spatial_comp = spatial_comp
+        super().__init__(log_flux_function=self.log_flux_function, *args, **kwargs)
 
-        super().__init__(
-            log_flux_function = self.log_flux_function, 
-            *args, **kwargs
-            )
-            
+    def log_flux_function(self, grid, spectral_params=None, spatial_params=None):
+        spectral_params = spectral_params or {}
+        spatial_params = spatial_params or {}
 
-    def log_flux_function(self, grid, spectral_params={}, spatial_params={}):
+        energy_vals = grid[..., 0, 0, 0]      # (E,)
+        spatial_vals = grid[0, ..., 1:]       # (lon, lat, 2)
 
-        # Extracting the unique energy values
-        energy_vals  = grid[...,0,0,0] 
+        energy_comp_vals = promote_batch(self.spectral_comp(energy_vals, **spectral_params), 1)     # (B1, E)
+        spatial_comp_vals = promote_batch(self.spatial_comp(spatial_vals, **spatial_params), 2)    # (B2, lon, lat)
 
-        # Extracting the unique spatial values
-        spatial_vals = grid[0, ..., 1:]
-
-        energy_comp_vals    = self.spectral_comp(energy_vals, **spectral_params)
-        spatial_comp_vals   = self.spatial_comp(spatial_vals, **spatial_params)
-
-        output_mat = energy_comp_vals[:, None, None] + spatial_comp_vals[None, :, :]
-
-        return output_mat
-        
-
+        return energy_comp_vals[:, :, None, None] + spatial_comp_vals[:, None, :, :]

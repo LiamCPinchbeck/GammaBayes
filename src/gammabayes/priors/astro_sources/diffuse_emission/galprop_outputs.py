@@ -51,9 +51,10 @@ Medium (the default) should take up about 130MB of disk space while High takes u
 
 
         if component=='all':
-            return (extract_galprop_prior_template(binning_geometry=binning_geometry, irf_loglike=irf_loglike, component='pion', resolution=text_res),
-                    extract_galprop_prior_template(binning_geometry=binning_geometry, irf_loglike=irf_loglike, component='bremss', resolution=text_res),
-                    extract_galprop_prior_template(binning_geometry=binning_geometry, irf_loglike=irf_loglike, component='ics', resolution=text_res))
+            # was: a call to a non-existent extract_galprop_prior_template with an undefined irf_loglike
+            return tuple(extract_galprop_components(binning_geometry=binning_geometry, component=c,
+                                                    resolution=text_res, **kwargs)
+                         for c in ('pion', 'bremss', 'ics'))
         else:
 
             component_dict = {'pion':'pion_decay_skymap', 'bremss':'bremss_skymap', 'ics':'ics_skymap_comp'}

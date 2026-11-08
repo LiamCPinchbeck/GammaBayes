@@ -195,3 +195,16 @@ def load_pickle(filename, load_mode='rb'):
 
 
 
+
+
+def assert_slots_exist(models_by_name: dict, slots, context: str = "source slots"):
+    """Fail loudly if a slot -> source-name map points at a source that is not
+    in ``models_by_name`` (silent desynchronisation of raw-index layout otherwise).
+
+    ``slots`` may be a dict {slot_id: name} or an iterable of names.
+    """
+    names = list(slots.values()) if isinstance(slots, dict) else list(slots)
+    missing = [n for n in names if n not in models_by_name]
+    if missing:
+        raise KeyError(f"{context}: {missing} not found in models_by_name "
+                       f"(available: {sorted(models_by_name)})")

@@ -69,9 +69,21 @@ class SourceFluxDiscreteLogPrior(DiscreteLogPrior):
 
         
 
-    def log_rate_source_function(self, grid, log_exposure_map:GammaLogExposure=None, *args, **kwargs):
+    def _log_exposure_on(self, grid, log_exposure_map=None):
+        """Exposure evaluated on ``grid`` (cached for the geometry's own grid).
+        The cache is keyed on the exposure *object*; if you mutate an exposure in
+        place (``add_single_exposure``) call ``self._cached_log_exposure = None``."""
         if log_exposure_map is None:
             log_exposure_map = self.log_exposure_map
+        own = (grid is getattr(self.binning_geometry, "_shaped_grid", None))
+        if own and getattr(self, "_cached_log_exposure", None) is not None \
+                and self._cached_log_exposure[0] is log_exposure_map:
+            return self._cached_log_exposure[1]
+        le = log_exposure_map(grid[..., 0].flatten(), grid[..., 1].flatten(), grid[..., 2].flatten()).reshape(grid.shape[:-1])
+        if own:
+            self._cached_log_exposure = (log_exposure_map, le)
+        return le
 
-
-        return self.log_flux_function(grid, *args, **kwargs) + log_exposure_map(grid[..., 0].flatten(), grid[..., 1].flatten(), grid[..., 2].flatten(), ).reshape(grid.shape[:-1])
+    def log_rate_source_function(self, grid, log_exposure_map:GammaLogExposure=None, *args, **kwargs):
+        """log flux (B, E, lon, lat) + log exposure (E, lon, lat) -> (B, E, lon, lat)."""
+        return self.log_flux_function(grid, *args, **kwargs) + self._log_exposure_on(grid, log_exposure_map)

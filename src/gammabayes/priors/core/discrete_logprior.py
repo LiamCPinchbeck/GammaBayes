@@ -31,7 +31,8 @@ class DiscreteLogPrior:
 
 
         self.name = name
-        self._cached_probs = None
+        self._cached_rates = None
+        self._cached_norm = None
         self._cached_params = None
 
 
@@ -86,7 +87,7 @@ class DiscreteLogPrior:
 
     def sample(self, norm, normalise=False, **params):
 
-        rates = torch.exp(self.eval_log_on_geom(**params))
+        rates = torch.exp(self.eval_log_on_geom(squeeze=True, **params))
         
         if normalise:
             rates/=rates.sum()
@@ -120,11 +121,18 @@ class DiscreteLogPrior:
         rates = self.rate_tensor_func(value, **params).float()
         return torch.log(rates)
 
-    def eval_log_on_geom(self, **params):
-        return self.log_rate(
-            self.binning_geometry.shaped_grid, 
-            **params
-            )
+    def eval_log_on_geom(self, squeeze: bool = True, **params):
+        """Log expected counts on the binning geometry.
+
+        Returns ``(B, E, lon, lat)`` for batched parameters.  With
+        ``squeeze=True`` (default) a ``B == 1`` axis is dropped so that the
+        pre-batching ``(E, lon, lat)`` call sites keep working; pass
+        ``squeeze=False`` to always get the batch axis.
+        """
+        out = self.log_rate(self.binning_geometry.shaped_grid, **params)
+        if squeeze and out.ndim == 4 and out.shape[0] == 1:
+            out = out[0]
+        return out
 
     def _exp_log_rate(self, *args, **kwargs):
         return torch.exp(self.log_rate(*args, **kwargs))

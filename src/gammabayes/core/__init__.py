@@ -7,6 +7,7 @@ from .parameter_set_class import ParameterSet
 # from .analysis_cube import AnalysisContainer
 from .parameter_set_collection_class import ParameterSetCollection
 from .utils import *
+from .batching import as_param, batch_size, promote_batch, iter_batch_chunks
 
 import numpy as np
 np.seterr(divide='ignore')

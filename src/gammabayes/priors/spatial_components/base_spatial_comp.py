@@ -1,46 +1,43 @@
-from astropy import units as u
-from gammabayes.priors.core.wrappers import _wrap_if_missing_keyword
-from gammabayes import update_with_defaults
+from gammabayes.core.batching import as_param, promote_batch
 from functools import partial
 import torch
 
+
 class BaseSpatial_PriorComp:
+    """Wraps a log-spatial function ``logfunc(lonlatgrid, **params)``.
+
+    Batch contract: ``lonlatgrid`` is ``(lon, lat, 2)``; each parameter is a
+    scalar or ``(B,)`` tensor; the return value is ``(B, lon, lat)``
+    (``B = 1`` for all-scalar / parameter-free maps).  Subclasses build
+    parameters with ``as_param(p, 2)`` so they broadcast as ``(B, 1, 1)``.
+    """
 
     def __init__(self, logfunc, *args, **kwargs):
-
         self.__input_logfunc = logfunc
 
-
-    def __call__(self, *args, **kwargs):
-
-
-        return self.__input_logfunc(*args, **kwargs)
-
-
+    def __call__(self, lonlatgrid, *args, **kwargs):
+        out = self.__input_logfunc(lonlatgrid, *args, **kwargs)
+        return promote_batch(out, 2)
 
 
 class PointSpatial_PriorComp(BaseSpatial_PriorComp):
 
     @staticmethod
     def log_point_mask(lonlatgrid, pos_lon, pos_lat, *args, **kwargs):
+        L = lonlatgrid[..., 0]
+        B_ = lonlatgrid[..., 1]
+        # pixel steps from the sorted unique axis values (layout-agnostic)
+        lu, bu = torch.unique(L), torch.unique(B_)
+        dlon = (lu[1] - lu[0]).abs()
+        dlat = (bu[1] - bu[0]).abs()
+        pos_lon = as_param(pos_lon, 2, like=L)
+        pos_lat = as_param(pos_lat, 2, like=L)
+        # bilinear (tent) deposition onto the neighbouring pixel centres;
+        # sums to 1 over the grid, differentiable in pos_lon / pos_lat
+        w = ((1. - (L[None] - pos_lon).abs() / dlon).clamp(min=0.)
+             * (1. - (B_[None] - pos_lat).abs() / dlat).clamp(min=0.))
+        return torch.log(w.clamp(min=1e-32) / (dlon * dlat))   # floor: finite grad, e^-87 ~ 0 physically
 
-        lon_vals = lonlatgrid[:, 0, 0]
-        lat_vals = lonlatgrid[0, :, 0]
-
-        lon_arg = torch.abs(lon_vals-pos_lon).argmin()
-        lat_arg = torch.abs(lat_vals-pos_lat).argmin()
-
-        point_mask_out = torch.zeros_like(lonlatgrid[:, :, 0])
-
-        point_mask_out[lon_arg, lat_arg] = 1.
-
-        return point_mask_out.log()
-
-    def __init__(self,pos_lon=0, pos_lat=0,
-                *args, **kwargs):
-
-        self.__log_point_mask = partial(self.log_point_mask,
-                                pos_lon=pos_lon, pos_lat=pos_lat)
-
-
+    def __init__(self, pos_lon=0, pos_lat=0, *args, **kwargs):
+        self.__log_point_mask = partial(self.log_point_mask, pos_lon=pos_lon, pos_lat=pos_lat)
         super().__init__(logfunc=self.__log_point_mask, *args, **kwargs)

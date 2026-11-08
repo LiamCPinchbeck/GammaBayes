@@ -55,6 +55,30 @@ class GammaBinning:
         self.axes = (self.energy_axis, self.lon_axis, self.lat_axis)
         self.axes_edges = (self.energy_edges, self.lon_edges, self.lat_edges)
 
+    @classmethod
+    def from_edges(cls, energy_edges, lon_edges, lat_edges, lon_res=None, lat_res=None):
+        """Build directly from bin edges (no ``int(range*res + 1)`` truncation), e.g. a padded
+        copy of another geometry.  Centres follow the constructor's conventions."""
+        self = cls.__new__(cls)
+        self.energy_edges = torch.as_tensor(energy_edges)
+        self.lon_edges = torch.as_tensor(lon_edges)
+        self.lat_edges = torch.as_tensor(lat_edges)
+        self.num_energy_bins = len(self.energy_edges)
+        self.num_lon_bins = len(self.lon_edges)
+        self.num_lat_bins = len(self.lat_edges)
+        self.lon_res = torch.tensor(lon_res if lon_res is not None else 1 / float(self.lon_edges[1] - self.lon_edges[0]))
+        self.lat_res = torch.tensor(lat_res if lat_res is not None else 1 / float(self.lat_edges[1] - self.lat_edges[0]))
+        self.log_energy_edges = torch.log10(self.energy_edges)
+        self.energy_axis = 10 ** (0.5 * (self.log_energy_edges[1:] + self.log_energy_edges[:-1]))
+        self.lon_axis = 0.5 * (self.lon_edges[1:] + self.lon_edges[:-1])
+        self.lat_axis = 0.5 * (self.lat_edges[1:] + self.lat_edges[:-1])
+        self.spatial_centre = torch.stack([(self.lon_edges[0] + self.lon_edges[-1]) / 2,
+                                           (self.lat_edges[0] + self.lat_edges[-1]) / 2])
+        self.bin_width_mat = self._construct_bin_widths()
+        self.axes = (self.energy_axis, self.lon_axis, self.lat_axis)
+        self.axes_edges = (self.energy_edges, self.lon_edges, self.lat_edges)
+        return self
+
 
 
 
