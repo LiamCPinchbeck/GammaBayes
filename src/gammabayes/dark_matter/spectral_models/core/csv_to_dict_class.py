@@ -35,7 +35,10 @@ class CSVDictionary:
         for column in self.df.columns:
             # Attempt to convert each column to the specified numeric type.
             # If a column contains non-numeric data, it will remain unchanged.
-            self.df[column] = pd.to_numeric(self.df[column], errors='ignore', downcast='float')
+            try:
+                self.df[column] = pd.to_numeric(self.df[column], downcast='float')
+            except (ValueError, TypeError):
+                pass
             if self.df[column].dtype == np.number or self.df[column].dtype == float:
                 self.df[column] = self.df[column].astype(numeric_type)
         
