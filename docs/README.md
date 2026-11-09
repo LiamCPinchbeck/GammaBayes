@@ -12,6 +12,7 @@ __Referencing__:
 
 To reference this code please reference the following paper [2401.13876](https://arxiv.org/abs/2401.13876) or use the following bibtex.
 
+```
 @article{pinchbeck2024gammabayes,
       title={GammaBayes: a Bayesian pipeline for dark matter detection with CTA}, 
       author={Liam Pinchbeck and Eric Thrane and Csaba Balazs},
@@ -20,7 +21,7 @@ To reference this code please reference the following paper [2401.13876](https:/
       archivePrefix={arXiv},
       primaryClass={astro-ph.HE}
 }
-
+```
 
 
 If you are using the GPU accelerated code please also cite the paper "How Can We Be Sure" which should be out soon.
@@ -31,7 +32,7 @@ If you are using the GPU accelerated code please also cite the paper "How Can We
 If you use the data from CosmiXs (https://arxiv.org/abs/2312.01153) or QCDUNC (referencing papers that have links to Zenodo databases;https://arxiv.org/abs/2303.11363, https://arxiv.org/abs/2202.11546 ,https://arxiv.org/abs/1812.07424) please also reference those sources. I have the BibTeX belo, but I'd double check them for you usages. And to be clear, we are not affiliated with these works, we just utilise their results.
 
 
-
+```
 @article{CosmiXs_ref,
   title   = {{CosmiXs: cosmic messenger spectra for indirect dark matter searches}},
   author  = {Arina, Chiara and Di Mauro, Mattia and Fornengo, Nicolao and
@@ -45,10 +46,10 @@ If you use the data from CosmiXs (https://arxiv.org/abs/2312.01153) or QCDUNC (r
   doi     = {10.1088/1475-7516/2024/03/035},
   url     = {https://doi.org/10.1088/1475-7516/2024/03/035}
 }
+```
 
 
-
-
+```
 @article{QCDUNC_Ref_1,
   title={{The Strong Force meets the Dark Sector: a robust estimate of QCD uncertainties for anti-matter dark matter searches}},
   author={Jueid, Adil and Kip, Jochem and Ruiz de Austri, Roberto and Skands, Peter},
@@ -59,7 +60,9 @@ If you use the data from CosmiXs (https://arxiv.org/abs/2312.01153) or QCDUNC (r
   year={2024},
   publisher={Springer}
 }
+```
 
+```
 @article{QCDUNC_Ref_2,
    title={{Impact of QCD uncertainties on antiproton spectra from dark-matter annihilation}},
    volume={2023},
@@ -72,8 +75,10 @@ If you use the data from CosmiXs (https://arxiv.org/abs/2312.01153) or QCDUNC (r
    author={Jueid, Adil and Kip, Jochem and Ruiz de Austri, Roberto and Skands, Peter},
    year={2023},
    month=apr, pages={068} }
+```
 
 
+```
 @article{QCDUNC_Ref_3,
    title={{Estimating QCD uncertainties in Monte Carlo event generators for gamma-ray dark matter searches}},
    volume={2019},
@@ -86,11 +91,12 @@ If you use the data from CosmiXs (https://arxiv.org/abs/2312.01153) or QCDUNC (r
    author={Amoroso, Simone and Caron, Sascha and Jueid, Adil and de Austri, Roberto Ruiz and Skands, Peter},
    year={2019},
    month=may, pages={007–007} }
-
+```
 
 If you use the default diffuse gamma-ray maps, they come from the GALPROP (https://arxiv.org/abs/2112.12745) package. 
 If you use them please also cite them, and specifically the webrun (https://arxiv.org/abs/1008.3642, https://galprop.stanford.edu/webrun.php), which I used to get some of the results.
 
+```
 @article{Porter:2021tlr,
     author = "Porter, Troy A. and Johannesson, Gudlaugur and Moskalenko, V. Igor",
     title = "{The GALPROP Cosmic-ray Propagation and Nonthermal Emissions Framework: Release v57}",
@@ -104,7 +110,10 @@ If you use them please also cite them, and specifically the webrun (https://arxi
     pages = "30",
     year = "2022"
 }
+```
 
+
+```
 @article{VLADIMIROV20111156,
 title = {GALPROP WebRun: An internet-based service for calculating galactic cosmic ray propagation and associated photon emissions},
 journal = {Computer Physics Communications},
@@ -119,6 +128,7 @@ author = {A.E. Vladimirov and S.W. Digel and G. Jóhannesson and P.F. Michelson 
 keywords = {Astroparticle physics, Diffusion, Elementary particles, Cosmic rays, ISM: general, Dark matter, Diffuse radiation, Gamma rays: ISM, Infrared: ISM, Radio continuum: ISM, X-rays: ISM},
 abstract = {GALPROP is a numerical code for calculating the galactic propagation of relativistic charged particles and the diffuse emissions produced during their propagation. The code incorporates as much realistic astrophysical input as possible together with latest theoretical developments and has become a de facto standard in astrophysics of cosmic rays. We present GALPROP WebRun, a service to the scientific community enabling easy use of the freely available GALPROP code via web browsers. In addition, we introduce the latest GALPROP version 54, available through this service.}
 }
+```
 
 
 
@@ -152,6 +162,8 @@ We recommend to look through the tutorials for an overview of the functionality 
 
 
 # Building the GammaBayes documentation
+
+Documentation should now be on ReadTheDocs, but if not you can get the pages locally via the following.
 
 ```
 docs/
