@@ -144,20 +144,6 @@ duplicate the arrays instead of reference the same one.
 
 This coding repository contains a Bayesian Inference pipeline for calculating dark matter related observables from (simulated) observations from the galactic centre. Example files that run the simulation and analysis can be found within the `docs` folder. All documentation for the code is within the notebook files contained within that folder, that make up the [ReadTheDocs](https://gammabayes.readthedocs.io/en/latest/index.html) page and all the major components that make up the analysis in the oncoming publication.
 
-A stable python package version of the code exists on `PyPi` that can be installed with the command,
-
-`pip install gammabayes`.
-
-This will also take care of the required dependencies for the project. 
-
-We recommend to look through the tutorials for an overview of the functionality of the code however, the figure below shows the main classes of `GammaBayes` in a UML diagram.
-
-
-![Alt text](https://raw.githubusercontent.com/lpin0002/GammaBayes/main/misc/GammaBayes_UML.png)
-
-
-
-
 
 
 
