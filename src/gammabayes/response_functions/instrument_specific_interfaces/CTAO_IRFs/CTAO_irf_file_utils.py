@@ -122,8 +122,9 @@ def find_ctao_irf_file_path(zenith_angle:int=20, hemisphere:str='South', prod_ve
                     return 'prod5', filename
                 else:
                     raise Exception('Found tarred file but could not extract sub-file.')
-            except:
-                raise Exception("Could not find prod5 irf file for the given inputs.")
+            except Exception as exc:
+                raise FileNotFoundError(f"Could not find prod5 irf file for the given inputs "
+                                        f"(looked for *{end_of_filename} under {untarred_parent_folder}): {exc!r}") from exc
     elif prod_vers == 'prod3b':
 
         unzipped_parent_folder = parent_irf_folder+f"{hemisphere}_z{zenith_angle}_50h"

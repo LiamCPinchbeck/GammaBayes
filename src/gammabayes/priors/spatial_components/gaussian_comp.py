@@ -5,6 +5,8 @@ from functools import partial
 
 
 class GaussianSpatial_PriorComp(BaseSpatial_PriorComp):
+    """Bivariate Gaussian sky map (log density per deg^2) with centre (``pos_lon``, ``pos_lat``), widths
+    ``sigma_lon`` / ``sigma_lat`` [deg] and correlation ``rho``; all parameters scalar or ``(B,)``."""
 
     @staticmethod
     def gaussian_logfunc(lonlatgrid, pos_lon, pos_lat, sigma_lon, sigma_lat, rho, normalisation=1., *args, **kwargs):

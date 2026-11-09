@@ -1,40 +1,23 @@
+"""Reader for the CosmiXs annihilation-spectrum tables.
+
+``CosmiXsReader`` exposes the same interface as ``PPPCReader`` (``mass_axis`` in TeV, ``log10x_axis``,
+``output_shape``, ``__getitem__``), so the two tables are interchangeable in ``SingleDMSpectralComp``.
+
+The CosmiXs tables (github.com/ajueid/CosmiXs; Arina et al., JCAP 03 (2024) 035, arXiv:2312.01153) are
+whitespace-separated with columns: DM mass [GeV], x = E_kin / m_DM (100 logarithmic bins), then one
+column per channel (29 in total, including the polarised eL/eR, WL/WT and ZL/ZT states) holding
+dN/dlog10(x), the same units as PPPC4DMID.  The reader converts the mass column to TeV and names the
+second column ``'Log[10,x]'`` so that the downstream interpolation (square-root interpolation on
+(log10 mass, log10 x), positivity by squaring, dN/dlog10(x) -> dN/dE) is identical for both tables.
 """
-CosmiXsReader — drop-in replacement for PPPCReader, exposing the SAME interface
-(mass_axis [TeV], log10x_axis, output_shape, __getitem__) so SingleDMSpectralComp
-needs only a 2-line change.
 
-CosmiXs tables (github.com/ajueid/CosmiXs; Arina et al., JCAP 03(2024)035,
-arXiv:2312.01153): AtProduction-Gamma_COSMIXs.dat (renamed from AtProduction-Gamma.dat), whitespace table, columns =
-DM mass [GeV], x = E_kin/mDM (100 log bins), then 29 channels (incl. polarized
-eL/eR, WL/WT, ZL/ZT), spectra in dN/dlog10(x) — same units as PPPC.
-
-WHERE IT GOES — in gammabayes .../spectral_components/<single_channel file>.py
-(the file defining SingleDMSpectralComp):
-
-    # 1. next to `from .PPPC_reader import PPPCReader` add:
-    from .cosmixs_reader import CosmiXsReader
-
-    # 2. replace the line
-    #    atprod_gammas = PPPCReader(single_channel_spectral_data_path+"/PPPC_Tables/AtProduction_gamma_EW_corrections.dat")
-    # with:
-    atprod_gammas = CosmiXsReader(single_channel_spectral_data_path + "/CosmiXs_Tables/AtProduction-Gamma_COSMIXs.dat")
-
-    # 3. replace `PPPCReader.darkSUSY_to_PPPC_converter[self.channel]`
-    # with:
-    CosmiXsReader.darkSUSY_to_CosmiXs_converter[self.channel]
-
-Everything downstream (sqrt-interpolation on (log10 mass, log10 x), positivity
-squaring, dN/dlog10x -> dN/dE conversion) is unchanged: this reader normalizes
-the table to PPPC conventions (mDM -> TeV; second column -> 'Log[10,x]').
-"""
 import numpy as np
-from .PPPC_reader import PPPCReader   # adjust to plain import if used standalone
+from .PPPC_reader import PPPCReader
 
 
 class CosmiXsReader(PPPCReader):
-    # darkSUSY channel name -> CosmiXs column. Unpolarized/summed columns chosen to
-    # match PPPC's convention. VERIFY the exact header strings once with
-    # `print(CosmiXsReader(path).keys())` and correct any that differ.
+    # darkSUSY channel name -> CosmiXs column (unpolarised / summed columns, matching the PPPC convention).
+    # The available column names of a table are listed by ``CosmiXsReader(path).keys()``.
     darkSUSY_to_CosmiXs_converter = {
         "e+e-": "dNdLog10x[e]", "mu+mu-": "dNdLog10x[mu]", "tau+tau-": "dNdLog10x[tau]",
         "nuenue": "dNdLog10x[nue]", "numunumu": "dNdLog10x[numu]", "nutaunutau": "dNdLog10x[nutau]",

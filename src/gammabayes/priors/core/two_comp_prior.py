@@ -3,11 +3,13 @@ from gammabayes.core.batching import promote_batch
 
 
 class TwoCompFluxPrior(SourceFluxDiscreteLogPrior):
-    """Separable flux prior: log F(E, lon, lat) = log S(E) + log M(lon, lat).
+    """Separable flux prior: log F(E, lon, lat) = log S(E) + log M(lon, lat), times the exposure.
 
-    ``spectral_comp(energy, **spectral_params)`` -> ``(B1, E)`` and
-    ``spatial_comp(lonlat, **spatial_params)`` -> ``(B2, lon, lat)`` are
-    combined by broadcasting, so ``B1, B2 in {1, B}``.  Output ``(B, E, lon, lat)``.
+    ``spectral_comp(energy, **spectral_params)`` returns ``(B1, E)`` and
+    ``spatial_comp(lonlat, **spatial_params)`` returns ``(B2, lon, lat)``; they are combined by
+    broadcasting, so ``B1, B2 in {1, B}``, and the log exposure is added.  ``eval_log_on_geom`` returns
+    ``(B, E, lon, lat)`` log expected counts (``(E, lon, lat)`` for ``B == 1``).  Parameters not passed at
+    call time take the components' constructor defaults.
     """
 
     def __init__(self, spectral_comp, spatial_comp, *args, **kwargs):

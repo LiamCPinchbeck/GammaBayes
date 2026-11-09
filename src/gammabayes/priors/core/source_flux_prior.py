@@ -12,14 +12,21 @@ import h5py, pickle
 from icecream import ic
 
 class SourceFluxDiscreteLogPrior(DiscreteLogPrior):
+    """A differential flux multiplied by the exposure.
 
+    ``log_flux_function(grid, **params)`` returns the log differential flux
+    [TeV^-1 cm^-2 s^-1 deg^-2] on the geometry's grid; the prior adds the log exposure from
+    ``log_exposure_map`` (a :class:`~gammabayes.core.exposure.GammaLogExposure`, or one built from
+    ``irf_loglike``, ``pointing_dirs`` and ``live_times``) to obtain log expected counts.  The exposure
+    on the geometry's own grid is evaluated once and cached per exposure object.
+    """
 
     def __init__(self,
                  log_flux_function: callable=None, 
                  binning_geometry: GammaBinning = None,
                  irf_loglike=None,
                  log_exposure_map=None, 
-                 pointing_dirs:np.ndarray[u.Quantity]=None, 
+                 pointing_dirs=None, 
                  live_times=None,
                  log_scaling_factor=0.,
                  *args,

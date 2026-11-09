@@ -3,6 +3,8 @@ from torch.distributions import Normal, Categorical
 
 
 def make_normal_kernel_with_std_and_bins(linear_axis, std, confidence_clearance=5):
+    """1-D Gaussian kernel sampled at the spacing of ``linear_axis``, ``confidence_clearance`` sigmas wide
+    (odd number of taps, not normalised).  Used by the legacy :class:`LogSumExpConv3D` operator."""
 
     bin_width = linear_axis[1]-linear_axis[0]
 
@@ -29,6 +31,13 @@ def make_normal_kernel_with_std_and_bins(linear_axis, std, confidence_clearance=
 loge10 = torch.log(torch.tensor(10.))
 
 def make_irf_kernel(geom, log10energy_std, lon_std, lat_std, confidence_clearance=5):
+    """Separable 3-D Gaussian IRF kernel ``(K_E, K_lon, K_lat)`` for the legacy ``LogSumExpConv3D``.
+
+    ``lon_std`` / ``lat_std`` are the PSF sigma in degrees.  ``log10energy_std`` is divided by
+    log10(e) before use, so the effective energy width is ln(10) times the value passed; this is kept
+    for reproducibility of 0.x results.  New analyses should use
+    :func:`gammabayes.utils.irf_forward.make_forward_irf_kernels`, which uses the width as given.
+    """
 
     log10_energy_kernel_axis = make_normal_kernel_with_std_and_bins(
         torch.log10(geom.energy_axis), 
@@ -48,6 +57,9 @@ def make_irf_kernel(geom, log10energy_std, lon_std, lat_std, confidence_clearanc
 
 
 class IRFKernelDist:
+    """Event-level IRF smearing for simulations: samples an energy / longitude / latitude offset per event
+    from separable Gaussian kernels on the measured geometry and redistributes a counts cube accordingly
+    (``sample_kernel``).  Events smeared outside the grid are dropped."""
 
     def __init__(self, measured_geom, irf_extractor, 
                     log_energy_sigma, lon_sigma, lat_sigma, kernel_sigmas=5):
@@ -65,23 +77,9 @@ class IRFKernelDist:
         self.lon_sigma = lon_sigma
         self.lat_sigma = lat_sigma
 
-        self.num_energy_kernel_bins = torch.tensor(
-                                                torch.ceil(
-                                                    self.log_energy_sigma*kernel_sigmas/self.log10_energy_diff
-                                                    ), 
-                                                dtype=int)
-
-        self.num_lon_kernel_bins = torch.tensor(
-                                                torch.ceil(
-                                                    self.lon_sigma*kernel_sigmas/self.lon_diff
-                                                    ), 
-                                                dtype=int)
-
-        self.num_lat_kernel_bins = torch.tensor(
-                                                torch.ceil(
-                                                    self.lat_sigma*kernel_sigmas/self.lat_diff
-                                                    ), 
-                                                dtype=int)
+        self.num_energy_kernel_bins = int(torch.ceil(torch.as_tensor(self.log_energy_sigma*kernel_sigmas/self.log10_energy_diff)))
+        self.num_lon_kernel_bins = int(torch.ceil(torch.as_tensor(self.lon_sigma*kernel_sigmas/self.lon_diff)))
+        self.num_lat_kernel_bins = int(torch.ceil(torch.as_tensor(self.lat_sigma*kernel_sigmas/self.lat_diff)))
 
         self._construct_kernel_axes()
         self._construct_kernels()
@@ -155,84 +153,37 @@ class IRFKernelDist:
 
 
     def sample_kernel(self, true_value_grid):
-        num_samples = int(true_value_grid.sum())
+        """Smear an integer counts cube (E, lon, lat) through the kernel by sampling one kernel offset
+        per event; events that leave the grid are dropped."""
+        counts = torch.as_tensor(true_value_grid).round().to(torch.int64)
+        shape = counts.shape
+        num_samples = int(counts.sum())
+        out = torch.zeros(shape, dtype=torch.as_tensor(true_value_grid).dtype, device=counts.device)
+        if num_samples == 0:
+            return out
         energy_indices, lon_indices, lat_indices = self._sample_indices(num_samples)
-
-        flattened_coord_grid = self.binning_geometry.shaped_grid.reshape((-1, 3))
-
-        flattened_meas_value_grid = torch.zeros_like(true_value_grid)
-        meas_grid_shape = flattened_meas_value_grid.shape
-        event_counter= 0 
-        separate_counter = 0
-        for energy_idx, energy_val in enumerate(self.binning_geometry.energy_axis):
-            for lon_idx, lon_val in enumerate(self.binning_geometry.lon_axis):
-                for lat_idx, lat_val in enumerate(self.binning_geometry.lat_axis):
-                    
-
-                    num_val = int(true_value_grid[energy_idx, lon_idx, lat_idx])
-
-                    if num_val>0:
-                        valset_energy_kernel_indices = energy_indices[event_counter:event_counter+num_val]
-                        valset_lon_kernel_indices = lon_indices[event_counter:event_counter+num_val]
-                        valset_lat_kernel_indices = lat_indices[event_counter:event_counter+num_val]
-
-
-                        valset_energy_indices   = valset_energy_kernel_indices + energy_idx
-                        valset_lon_indices      = valset_lon_kernel_indices + lon_idx
-                        valset_lat_indices      = valset_lat_kernel_indices + lat_idx
-
-
-                        good_energy_indices = torch.where(valset_energy_indices<0, False, True)
-                        good_lon_indices    = torch.where(valset_lon_indices<0, False, True)
-                        good_lat_indices    = torch.where(valset_lat_indices<0, False, True)
-
-                        good_energy_indices2 = torch.where(valset_energy_indices>=meas_grid_shape[0], False, True)
-                        good_lon_indices2    = torch.where(valset_lon_indices>=meas_grid_shape[1], False, True)
-                        good_lat_indices2    = torch.where(valset_lat_indices>=meas_grid_shape[2], False, True)
-
-                        indices_cleaned = good_energy_indices*good_lon_indices*good_lat_indices
-                        indices_cleaned2 = good_energy_indices2*good_lon_indices2*good_lat_indices2
-
-                        indices_cleaned = indices_cleaned*indices_cleaned2
-
-                        valset_energy_indices   = valset_energy_indices[indices_cleaned]
-                        valset_lon_indices      = valset_lon_indices[indices_cleaned]
-                        valset_lat_indices      = valset_lat_indices[indices_cleaned]
-
-                        separate_counter+=len(valset_energy_indices)
-                        
-                        flattened_meas_value_grid[valset_energy_indices, valset_lon_indices, valset_lat_indices]+=1
-
-                        event_counter += num_val
-
-        return flattened_meas_value_grid
-
-
-
-
-
-
-
-
-
-
-
-
+        flat = counts.flatten()
+        voxel = torch.repeat_interleave(torch.arange(flat.numel(), device=counts.device), flat)   # (N,) in voxel order
+        e0, l0, b0 = torch.unravel_index(voxel, shape)
+        e = e0 + energy_indices.to(counts.device); l = l0 + lon_indices.to(counts.device); b = b0 + lat_indices.to(counts.device)
+        ok = (e >= 0) & (e < shape[0]) & (l >= 0) & (l < shape[1]) & (b >= 0) & (b < shape[2])
+        out.index_put_((e[ok], l[ok], b[ok]), torch.ones(int(ok.sum()), dtype=out.dtype, device=out.device), accumulate=True)
+        return out
 
 
 # ---------------------------------------------------------------------------
-# Energy-calibrated PSF kernels (A3)
+# Energy-calibrated PSF kernels
 # ---------------------------------------------------------------------------
 def make_spatial_kernel_per_energy(geom, sigma_deg, confidence_clearance=5, pixel_floor=False):
     """Per-true-energy 2-D Gaussian PSF kernels on a common tap grid.
 
     sigma_deg: (E,) tensor of Gaussian widths [deg] (``IRFExtractor.psf_sigma_vs_energy``).
-    The tap grid is sized by the LARGEST sigma (``confidence_clearance`` sigmas,
-    odd number of taps); narrow planes just have most of their weight near the
-    centre.  Each plane is normalised to unit sum.  Returns (E, K_lon, K_lat).
+    The tap grid is sized by the largest sigma (``confidence_clearance`` sigmas,
+    odd number of taps); planes with a narrower PSF concentrate their weight near the
+    centre of the same grid.  Each plane is normalised to unit sum.  Returns (E, K_lon, K_lat).
 
-    pixel_floor adds Delta^2/12 per axis in quadrature (use it here OR in
-    ``psf_sigma_vs_energy``, not both).
+    pixel_floor adds Delta^2/12 per axis in quadrature; apply it either here or in
+    ``psf_sigma_vs_energy``, not in both.
     """
     sigma = torch.as_tensor(sigma_deg, dtype=geom.lon_axis.dtype).reshape(-1)
     if sigma.shape[0] != len(geom.energy_axis):

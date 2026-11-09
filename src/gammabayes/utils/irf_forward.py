@@ -2,13 +2,13 @@
 
     obs[r] = sum_t  P(r | t) mu[t]
 
-* ``mu`` = expected counts per TRUE bin, on a true grid padded by the kernel
+* ``mu`` = expected counts per true bin, on a true grid padded by the kernel
   half-width on every side (``pads``), so true events outside the analysis
   window can migrate in.
 * ``P(r | t)`` = probability that an event in true bin t is reconstructed in
   bin r.  Each kernel is a bin-integrated Gaussian and sums to 1 over all r
   (``bin_prob_kernel``), so the operator conserves counts up to migration out of
-  the reconstructed window, which is physical.
+  the reconstructed window (events that physically leave the field of view).
 * The output is the reconstructed window only ("valid" convolution):
   (B, E_t, H_t, W_t) -> (B, E_t - 2 pE, H_t - 2 pH, W_t - 2 pW).
 
@@ -16,14 +16,14 @@ The PSF may depend on true energy (``spatial_kernel`` of shape (E_t, K_h, K_w)):
 the spatial pass runs on the true-energy planes before energy dispersion, which
 is the exact order for P(r_E, r_x | t_E, t_x) = P_E(r_E | t_E) P_x(r_x - t_x | t_E).
 
-Inputs / outputs are LOG counts.  Both passes run in linear space after an
+Inputs and outputs are log counts.  Both passes run in linear space after an
 exp-shift: per (batch, true-energy plane) for the spatial pass, per (batch, pixel)
 for the energy pass.  Contributions more than ~87 nats (fp32; ~708 fp64) below the
-local maximum underflow -- < 1e-38 of the local rate, irrelevant next to the CCR that
-is added afterwards.  Empty windows are clamped to the dtype's smallest normal number
+local maximum underflow to zero; this is below 1e-38 of the local rate and negligible next to the
+CCR background added afterwards.  Empty windows are clamped to the dtype's smallest normal number
 (finite log, zero gradient) so -inf never reaches logaddexp/autograd (0 * inf = NaN).
 ``linear_energy_max_range`` (default inf) forces the exact log-space unfold path
-(K_d x memory) when the per-pixel energy range exceeds it -- testing only.
+(K_d x memory) when the per-pixel energy range exceeds it; intended for testing.
 """
 from __future__ import annotations
 import math
@@ -51,12 +51,13 @@ def bin_prob_kernel(width, sigma, clearance=4.0):
     ``sigma`` scalar -> (K,), or (N,) -> (N, K) on a common tap grid sized by
     max(sigma).  Truncated at ``clearance`` sigma (at least 1 bin) and renormalised
     to sum 1 per row, so truncation never loses counts."""
-    sig = torch.as_tensor(sigma, dtype=torch.float64)
+    # computed on the CPU in float64 (exact tails; MPS has no float64), see make_forward_irf_kernels for the cast
+    sig = torch.as_tensor(sigma).detach().cpu().to(torch.float64)
     scalar = sig.ndim == 0
     sig = sig.reshape(-1).clamp(min=1e-12)
     w = float(width)
     n = max(1, int(math.ceil(clearance * float(sig.max()) / w)))
-    d = torch.arange(-n, n + 1, dtype=torch.float64)[None, :]
+    d = torch.arange(-n, n + 1, dtype=torch.float64, device="cpu")[None, :]
     s = (w / sig)[:, None]
     p = (_G((d + 1) * s) - 2 * _G(d * s) + _G((d - 1) * s)) / s
     p = p.clamp(min=0.0)
@@ -65,13 +66,16 @@ def bin_prob_kernel(width, sigma, clearance=4.0):
 
 
 def make_forward_irf_kernels(log10E_width, lon_width, lat_width, log10E_std, lon_std, lat_std=None,
-                             clearance=4.0, dtype=None):
+                             clearance=4.0, dtype=None, device=None):
     """(energy_kernel (K_d,), spatial_kernel (K_h,K_w) or (E_t,K_h,K_w)) probabilities.
 
     log10E_std: energy resolution in dex (sigma of log10 E_reco - log10 E_true).
     lon_std / lat_std: PSF sigma [deg]; scalars, or (E_t,) for an energy-dependent PSF.
+    The kernels are returned in ``dtype`` (default: the torch default dtype) on ``device``
+    (default: the torch default device).
     """
     dtype = dtype or torch.get_default_dtype()
+    device = device if device is not None else torch.get_default_device()
     lat_std = lon_std if lat_std is None else lat_std
     kE = bin_prob_kernel(log10E_width, log10E_std, clearance)
     kL = bin_prob_kernel(lon_width, lon_std, clearance)
@@ -84,11 +88,15 @@ def make_forward_irf_kernels(log10E_width, lon_width, lat_width, log10E_std, lon
         if kB.ndim == 1:
             kB = kB[None].expand(kL.shape[0], -1)
         kS = kL[:, :, None] * kB[:, None, :]
-    return kE.to(dtype), kS.to(dtype)
+    return kE.to(dtype=dtype, device=device), kS.to(dtype=dtype, device=device)
 
 
 # ------------------------------------------------------------------ operator
 class IRFForwardConv(nn.Module):
+    """Separable, count-conserving IRF forward operator; see the module docstring for the
+    conventions.  Call the instance on a ``(E_t, lon_t, lat_t)`` or ``(B, E_t, lon_t, lat_t)`` log-counts
+    cube on the padded true grid to obtain log counts on the analysis grid."""
+
 
     def __init__(self, energy_kernel, spatial_kernel, max_batch=None, linear_energy_max_range=float("inf"),
                  norm_atol=1e-5):
@@ -156,13 +164,13 @@ class IRFForwardConv(nn.Module):
         return torch.log(zE.clamp_min(tiny)) + mE
 
     def dense_reference(self, x):
-        """Brute-force sum_t P(r|t) mu[t] on a single small cube (testing only)."""
-        x = x.double()
+        """Dense evaluation of sum_t P(r|t) mu[t] on a single small cube, for testing the fast path."""
+        x = x.detach().cpu().double()                                   # CPU float64 reference
         D, H, W = x.shape
-        kE = self.k_energy.flip(0).double(); kS = self.k_spatial.flip(-2, -1).double()
+        kE = self.k_energy.flip(0).cpu().double(); kS = self.k_spatial.flip(-2, -1).cpu().double()
         pE, pH, pW = self.pads
         Do, Ho, Wo = D - 2 * pE, H - 2 * pH, W - 2 * pW
-        out = torch.zeros(Do, Ho, Wo, dtype=torch.float64)
+        out = torch.zeros(Do, Ho, Wo, dtype=torch.float64, device="cpu")
         mu = x.exp()
         for t in range(D):
             ks = kS[t] if self.per_energy else kS

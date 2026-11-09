@@ -6,7 +6,7 @@ import torch
 class BaseSpatial_PriorComp:
     """Wraps a log-spatial function ``logfunc(lonlatgrid, **params)``.
 
-    Batch contract: ``lonlatgrid`` is ``(lon, lat, 2)``; each parameter is a
+    Batching: ``lonlatgrid`` is ``(lon, lat, 2)``; each parameter is a
     scalar or ``(B,)`` tensor; the return value is ``(B, lon, lat)``
     (``B = 1`` for all-scalar / parameter-free maps).  Subclasses build
     parameters with ``as_param(p, 2)`` so they broadcast as ``(B, 1, 1)``.
@@ -21,6 +21,9 @@ class BaseSpatial_PriorComp:
 
 
 class PointSpatial_PriorComp(BaseSpatial_PriorComp):
+    """Point source at (``pos_lon``, ``pos_lat``) [deg]: the unit flux is deposited bilinearly on the four
+    pixel centres around the position (log density per deg^2), which keeps the map differentiable in
+    the position.  Positions may be scalars or ``(B,)``."""
 
     @staticmethod
     def log_point_mask(lonlatgrid, pos_lon, pos_lat, *args, **kwargs):

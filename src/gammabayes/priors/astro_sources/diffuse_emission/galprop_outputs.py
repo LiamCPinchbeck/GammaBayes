@@ -20,6 +20,9 @@ def extract_galprop_components(binning_geometry:GammaBinning,
                                    resolution:Literal['Medium', 'High']='Medium',
                                    **kwargs
                                    ):
+    """Read a GALPROP output cube and return its energy axis, sky axes and flux for ``component``
+    ('pion', 'bremss', 'ics', their sum 'all', or a 'custom' FITS file), downloading the standard
+    file for ``resolution`` on first use."""
 
     res_dict = {'Medium':5, 'High':6}
     file_endings_dict = {5:"j8h245c88vhzr5yu", 6:"uxwddrp6wtlkt4pd"}
@@ -51,10 +54,15 @@ Medium (the default) should take up about 130MB of disk space while High takes u
 
 
         if component=='all':
-            # was: a call to a non-existent extract_galprop_prior_template with an undefined irf_loglike
-            return tuple(extract_galprop_components(binning_geometry=binning_geometry, component=c,
-                                                    resolution=text_res, **kwargs)
-                         for c in ('pion', 'bremss', 'ics'))
+            # total diffuse emission = pion + bremss + ics on the SAME axes (the previous version returned a
+            # tuple of three dicts, which the interpolation / prior builders below could not consume)
+            parts = [extract_galprop_components(binning_geometry=binning_geometry, component=c,
+                                                resolution=text_res, **kwargs)
+                     for c in ('pion', 'bremss', 'ics')]
+            out = dict(parts[0])
+            out['data'] = parts[0]['data'] + parts[1]['data'] + parts[2]['data']
+            out['components'] = {c: p['data'] for c, p in zip(('pion', 'bremss', 'ics'), parts)}
+            return out
         else:
 
             component_dict = {'pion':'pion_decay_skymap', 'bremss':'bremss_skymap', 'ics':'ics_skymap_comp'}
@@ -87,9 +95,9 @@ Medium (the default) should take up about 130MB of disk space while High takes u
     lat_axis_2 = np.arange(__header["CRVAL2"], 
                                     __header["CRVAL2"]+__header["CDELT2"]*__header["NAXIS2"], 
                                     __header["CDELT2"])
-    energy_axis = 10**np.linspace(__header["CRVAL3"], 
-                                    __header["CRVAL3"]+__header["CDELT3"]*__header["NAXIS3"], 
-                                    __header["NAXIS3"])
+    # NAXIS3 planes at CRVAL3 + k*CDELT3, k = 0..NAXIS3-1 (the old endpoint CRVAL3 + CDELT3*NAXIS3 stretched the
+    # axis by one step, i.e. the top plane was mislabelled by a factor 10**CDELT3 in energy)
+    energy_axis = 10**(__header["CRVAL3"] + __header["CDELT3"]*np.arange(__header["NAXIS3"]))
     
     energy_axis = energy_axis/1e6
 
@@ -107,10 +115,13 @@ Medium (the default) should take up about 130MB of disk space while High takes u
 
 
     # Finding longitude and latitude values that fall within the bounds of the given binning geometry
-    care_about_lon_mask = np.logical_and(np.where(new_longitude_axis<=binning_geometry.lon_axis[-1].numpy()+2*binning_geometry.lon_res.numpy(), True, False), 
-                                         np.where(new_longitude_axis>=binning_geometry.lon_axis[0].numpy()-2*binning_geometry.lon_res.numpy(), True, False))
-    care_about_lat_mask = np.logical_and(np.where(lat_axis_2<=binning_geometry.lat_axis[-1].numpy()+2*binning_geometry.lat_res.numpy(), True, False), 
-                                         np.where(lat_axis_2>=binning_geometry.lat_axis[0].numpy()-2*binning_geometry.lat_res.numpy(), True, False))
+    # keep a margin of two GEOMETRY bin widths (lon_res is bins per degree, not a width)
+    dlon = float(binning_geometry.lon_axis[1] - binning_geometry.lon_axis[0]) if len(binning_geometry.lon_axis) > 1 else 1.0
+    dlat = float(binning_geometry.lat_axis[1] - binning_geometry.lat_axis[0]) if len(binning_geometry.lat_axis) > 1 else 1.0
+    lon_lo, lon_hi = float(binning_geometry.lon_axis[0]) - 2*dlon, float(binning_geometry.lon_axis[-1]) + 2*dlon
+    lat_lo, lat_hi = float(binning_geometry.lat_axis[0]) - 2*dlat, float(binning_geometry.lat_axis[-1]) + 2*dlat
+    care_about_lon_mask = (new_longitude_axis >= lon_lo) & (new_longitude_axis <= lon_hi)
+    care_about_lat_mask = (lat_axis_2 >= lat_lo) & (lat_axis_2 <= lat_hi)
 
     new_longitude_axis = new_longitude_axis[care_about_lon_mask]
     lat_axis_2 = lat_axis_2[care_about_lat_mask]
@@ -137,11 +148,12 @@ Medium (the default) should take up about 130MB of disk space while High takes u
     del __data
 
 
+    _dt = torch.get_default_dtype()
     return {
-        'energy_axis':torch.tensor(energy_axis), 
-        'lon_axis':torch.tensor(new_longitude_axis), 
-        'lat_axis':torch.tensor(lat_axis_2), 
-        'data':torch.tensor(reformatted_data_matrix)}
+        'energy_axis': torch.as_tensor(energy_axis, dtype=_dt),
+        'lon_axis': torch.as_tensor(new_longitude_axis, dtype=_dt),
+        'lat_axis': torch.as_tensor(lat_axis_2, dtype=_dt),
+        'data': torch.as_tensor(reformatted_data_matrix, dtype=_dt)}
 
 
 def extract_and_interpolate_galprop_components(
@@ -152,6 +164,9 @@ def extract_and_interpolate_galprop_components(
     resolution:Literal['Medium', 'High']='Medium',
     extracted_galprop_information = None,
     **kwargs):
+    """Interpolate a GALPROP component onto ``binning_geometry`` and return the log differential
+    flux cube ``(E, lon, lat)``; ``extracted_galprop_information`` lets a previous
+    :func:`extract_galprop_components` result be reused."""
 
     if extracted_galprop_information is None:
         extracted_galprop_information = extract_galprop_components(
@@ -185,6 +200,8 @@ def get_galprop_static_source_flux_prior(binning_geometry:GammaBinning,
         resolution:Literal['Medium', 'High']='Medium',
         extracted_galprop_information = None,
         *args, **kwargs):
+    """A :class:`StaticSourceDistTemplate` holding the interpolated GALPROP flux for ``component``;
+    the remaining arguments (exposure, name, ...) are passed to the template."""
 
     log_flux_interpolated = extract_and_interpolate_galprop_components(
         binning_geometry=binning_geometry, 

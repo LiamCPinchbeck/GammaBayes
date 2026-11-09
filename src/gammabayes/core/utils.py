@@ -198,8 +198,8 @@ def load_pickle(filename, load_mode='rb'):
 
 
 def assert_slots_exist(models_by_name: dict, slots, context: str = "source slots"):
-    """Fail loudly if a slot -> source-name map points at a source that is not
-    in ``models_by_name`` (silent desynchronisation of raw-index layout otherwise).
+    """Raise if a slot -> source-name map refers to a source that is not in ``models_by_name``;
+    without the check a mismatch between slot indices and sources would go unnoticed.
 
     ``slots`` may be a dict {slot_id: name} or an iterable of names.
     """

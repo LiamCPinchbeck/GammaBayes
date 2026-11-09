@@ -1,17 +1,18 @@
-"""
-qcdunc_reader.py — reader for QCDUNC wUncertainty tables (github.com/ajueid/qcd-dm.github.io).
-File: data/wUncertainty/AtProduction-Ga.dat  ->  <data_path>/QCDUNC_Tables/AtProduction-Ga.dat
-Goes beside PPPC_reader.py.
+"""Reader for the QCD-uncertainty annihilation-spectrum tables (github.com/ajueid/qcd-dm.github.io).
 
-Column-NAME parsing (matches their Interpolate.py): whitespace table (sep=2+ spaces),
-columns '# DM' [GeV], 'x' (=E/mDM), and per channel:
-  'dN/dx [ch]', '+DHad [ch]','-DHad [ch]', '+DScale [ch]','-DScale [ch]', '+DcNS [ch]','-DcNS [ch]'
-+D* are signed offsets to ADD, -D* signed offsets to SUBTRACT (their convention).
-Exposes PPPCReader-like interface (mass_axis [TeV], log10x_axis, output_shape, __getitem__),
-spectra converted dN/dx -> dN/dlog10x (x*ln10). Synthesizes '<ch>_up'/'<ch>_down' with the
-three sources (hadronization, shower scale, non-singular) combined in quadrature
-(independent; Amoroso et al. JCAP 05(2019)007, arXiv:1812.07424).
+Reads ``data/wUncertainty/AtProduction-Ga.dat`` (shipped as ``QCDUNC_Tables/AtProduction-Ga.dat`` or
+``AtProduction-Ga-Combined-Up-QCDUNC.dat``).  The table is whitespace-separated (two or more spaces)
+with columns ``'# DM'`` [GeV], ``'x'`` (= E / m_DM) and, per channel, ``'dN/dx [ch]'`` and the signed
+offsets ``'+DHad [ch]'``, ``'-DHad [ch]'``, ``'+DScale [ch]'``, ``'-DScale [ch]'``, ``'+DcNS [ch]'``,
+``'-DcNS [ch]'`` (hadronisation, shower scale and non-singular contributions; the ``+`` offsets are
+added to the central value, the ``-`` offsets subtracted, following the upstream convention).
+
+The reader exposes the ``PPPCReader`` interface (``mass_axis`` in TeV, ``log10x_axis``, ``output_shape``,
+``__getitem__``), converts dN/dx to dN/dlog10(x) and provides ``'<ch>_up'`` / ``'<ch>_down'`` spectra
+with the three uncertainty sources combined in quadrature (treated as independent; Amoroso et al.,
+JCAP 05 (2019) 007, arXiv:1812.07424).
 """
+
 import numpy as np, pandas as pd
 
 _CH = ['ee', 'mumu', 'tautau', 'uu', 'dd', 'ss', 'cc', 'bb', 'tt', 'gaga', 'zz', 'ww', 'gg', 'hh']

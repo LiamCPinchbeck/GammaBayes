@@ -2,8 +2,19 @@ import torch
 import pickle
 
 class GammaBinning:
-    """Base lass to handle different coordinate dimensionalities and shapes. 
-    e.g. 3D and 6D cartesian and ( 1D ) x ( 2D hexagonal ) geometries."""
+    """Regular (energy, longitude, latitude) analysis grid.
+
+    The energy axis is log-uniform between ``energy_min`` and ``energy_max`` [TeV] with ``energy_res``
+    bins per decade; the sky axes are uniform in Galactic longitude / latitude [deg] with ``lon_res`` /
+    ``lat_res`` bins per degree.  ``energy_axis``, ``lon_axis`` and ``lat_axis`` hold the bin centres
+    (the geometric centre in energy), ``*_edges`` the edges, ``bin_width_mat`` the bin volumes
+    dE x dlon x dlat and ``shaped_grid`` the ``(E, lon, lat, 3)`` array of centre coordinates that model
+    components receive.  Tensors are created on the default torch device and dtype.
+
+    ``from_edges`` builds a geometry from explicit edges; ``padded`` returns the enlarged true-space grid
+    used by :class:`gammabayes.utils.irf_forward.IRFForwardConv`.  Two geometries compare equal when
+    their edges agree.
+    """
 
     def __init__(self, 
             energy_res, energy_min, energy_max, 
@@ -84,6 +95,42 @@ class GammaBinning:
 
 
         
+    # -- equality on the edges (exposures / priors built on separately constructed but identical
+    #    geometries used to compare unequal because the default __eq__ is identity)
+    def __eq__(self, other):
+        if not isinstance(other, GammaBinning):
+            return NotImplemented
+        return all(a.shape == b.shape and torch.allclose(a.to(b.dtype), b, rtol=1e-6, atol=1e-9)
+                   for a, b in zip(self.axes_edges, other.axes_edges))
+
+    __hash__ = object.__hash__
+
+    def __repr__(self):
+        e, l, b = self.axes_edges
+        return (f"GammaBinning(E: {len(e)-1} bins {float(e[0]):.3g}-{float(e[-1]):.3g} TeV, "
+                f"lon: {len(l)-1} bins {float(l[0]):.3g}..{float(l[-1]):.3g} deg, "
+                f"lat: {len(b)-1} bins {float(b[0]):.3g}..{float(b[-1]):.3g} deg)")
+
+    def padded(self, pads):
+        """Geometry extended by ``pads = (nE, nLon, nLat)`` whole bins on every side (same bin
+        widths; log-uniform in energy).  The interior edges are this geometry's edges exactly, so a
+        'valid' convolution over the padded cube returns ``self``.  This is the true-space grid for
+        :class:`gammabayes.utils.IRFForwardConv`."""
+        pE, pL, pB = (int(p) for p in pads)
+
+        def ext(e, p):
+            if p == 0:
+                return e
+            d = e[1] - e[0]
+            k = torch.arange(1, p + 1, dtype=e.dtype, device=e.device)
+            return torch.cat([e[0] - d * k.flip(0), e, e[-1] + d * k])
+
+        e = self.energy_edges
+        lE = ext(torch.log10(e.detach().cpu().double()), pE)            # float64 on the CPU (MPS has no float64)
+        return GammaBinning.from_edges((10 ** lE).to(dtype=e.dtype, device=e.device),
+                                       ext(self.lon_edges, pL), ext(self.lat_edges, pB),
+                                       lon_res=float(self.lon_res), lat_res=float(self.lat_res))
+
     def _construct_bin_widths(self):
         self.energy_bin_widths = self.energy_edges[1:] - self.energy_edges[:-1]
         self.lon_bin_widths = self.lon_edges[1:]-self.lon_edges[:-1]

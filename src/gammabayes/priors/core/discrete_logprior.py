@@ -10,10 +10,23 @@ class DiscreteLogPrior:
     support = constraints.real
     has_enumerate_support = False
 
+    """Base class of every source model, giving the expected counts per bin of a :class:`GammaBinning`.
+
+    A subclass (or the ``rate_tensor_logfunc`` argument) provides ``log_rate(grid, **params)``, the
+    natural-log expected counts on the geometry's ``shaped_grid`` for scalar or ``(B,)`` parameters.
+    ``eval_log_on_geom(**params)`` evaluates it on the geometry (``(E, lon, lat)``, or
+    ``(B, E, lon, lat)`` for batched parameters), ``sample`` draws a Poisson realisation,
+    ``sample_categorical`` draws a fixed number of events, and ``log_normalisation`` returns the log of
+    the total expected counts.
+    """
+
     def __init__(self, binning_geometry, rate_tensor_func=None, name=None, rate_tensor_logfunc=None):
         """
-        energy_edges: assumed to be in linear space, log10 spacing is applied internally. Presumes that 
-        the inputs are either linearly spaced or have the appropriate jacobian applied.
+        Args:
+            binning_geometry: the analysis grid.
+            rate_tensor_func: optional callable returning linear expected counts (default: ``exp`` of the log rate).
+            name: label used in printouts.
+            rate_tensor_logfunc: callable ``(grid, **params) -> log expected counts``; subclasses usually supply it.
         """
         self.binning_geometry = binning_geometry
         if rate_tensor_logfunc is not None:

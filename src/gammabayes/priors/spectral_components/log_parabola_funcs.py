@@ -7,6 +7,11 @@ from functools import partial
 # Values from here https://arxiv.org/pdf/1903.06621
 
 class LogParabola(BaseSpectral_PriorComp):
+    """Log parabola phi0 (E / ref_energy)^-(index + beta log10(E / ref_energy)).
+
+    The curvature term uses log10 while the power is taken with the natural logarithm, so ``beta`` is
+    1 / ln(10) times the value in the gammapy / Fermi convention (which uses ln in both places).
+    """
 
     @staticmethod
     def log_log_parabola_func(energy, index, phi0, beta, ref_energy):

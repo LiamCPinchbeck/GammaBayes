@@ -1,19 +1,10 @@
+include README.md
 include gammabayes/package_data/*.gz
 include gammabayes/package_data/*.txt
 include gammabayes/package_data/*.fits
-include gammabayes/dark_matter/channel_spectra/PPPC_Tables/*
-include gammabayes/dark_matter/channel_spectra/PPPC_Tables/AtProduction-Gamma_COSMIXs.dat
-include gammabayes/dark_matter/channel_spectra/PPPC_Tables/AtProduction_gamma_EW_corrections.dat
-include gammabayes/dark_matter/channel_spectra/QCDUNC_Tables/AtProduction-Ga-Combined-Up-QCDUNC
-include gammabayes/dark_matter/channel_spectra/CosmiXs_Tables/*
-include gammabayes/dark_matter/channel_spectra/CosmiXs_Tables/AtProduction-Gamma_COSMIXs.dat
-include gammabayes/dark_matter/CosmiXs_Tables/CosmiXs_Tables/AtProduction-Gamma_COSMIXs.dat
-include gammabayes/dark_matter/channel_spectra/QCDUNC_Tables/*
-include gammabayes/dark_matter/QCDUNC_Tables/*
-include gammabayes/dark_matter/220913_145357/bfmlambdaarray.npy
-include gammabayes/dark_matter/220913_145357/lambdarange.npy
-include gammabayes/dark_matter/220913_145357/massrange.npy
-include gammabayes/dark_matter/dark_matter_spectra/AtProduction_gammas.dat
-include gammabayes/dark_matter/darkSUSY_BFs/darkSUSY_BFs_cleaned*
-include gammabayes/dark_matter/temp/*
-include gammabayes/CTAO_irf_file_fits/*
+recursive-include gammabayes/package_data/CTAO_irf_fits_files *
+include gammabayes/dark_matter/PPPC_Tables/*.dat
+include gammabayes/dark_matter/CosmiXs_Tables/*.dat
+include gammabayes/dark_matter/QCDUNC_Tables/*.dat
+recursive-include gammabayes/dark_matter/spectral_models/Z2_ScalarSinglet/annihilation_ratio_data *
+recursive-include gammabayes/dark_matter/spectral_models/Z5/annihilation_ratio_data *

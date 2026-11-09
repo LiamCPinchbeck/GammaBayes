@@ -8,14 +8,30 @@ from .reg_interpolator import RegularTorchInterpolator
 from astropy import units as u
 
 import copy
+import math
 from warnings import warn
 import torch
 
 
 def trivial_log_aeff(energy, lon, lat, pointing_dir=None):
+    """Unit effective area (log 0): used for templates that are already rates, e.g. the CCR background."""
     return energy*0.
 
 class GammaLogExposure:
+    """Log exposure cube log[A_eff(E, offset) x t_live x bin volume] on a :class:`GammaBinning`.
+
+    One entry per bin of the geometry, in ``aeff_units x s x TeV x deg^2`` (cm^2 s TeV deg^2 by
+    default), summed over the given pointings.  Live times may be astropy quantities or seconds and are
+    stored in seconds.  Bins where the effective area is undefined (energies outside the IRF table) hold
+    ``-inf`` in ``log_exposure_map``.
+
+    Calling the object, ``logexp(energy, lon, lat)``, interpolates the exposure at arbitrary coordinates
+    and returns its log, floored at the log of the smallest normal number so that model cubes stay
+    finite.  ``use_log_aeff=False`` gives the acceptance-free exposure ``t_live x bin volume`` for
+    templates that are already event rates (the cosmic-ray background), and two exposures on the same
+    geometry can be added with ``+``.
+    """
+
     def __init__(self, 
                  binning_geometry:GammaBinning, 
                  irfs=None, 
@@ -55,16 +71,18 @@ class GammaLogExposure:
             self.__parse_livetime(live_times=live_times)
             self.__parse_pointing_dirs(pointing_dirs=pointing_dirs)
                 
-            self.unit = self.live_time_units*self.aeff_units
+            # live times are stored in SECONDS (see __parse_livetime), so the map's unit is aeff_units * s.
+            # The old code used live_time_units here, double-counting e.g. a factor 3600 for hour inputs.
+            self.unit = u.s*self.aeff_units
 
             # Gets rid of annoying things like u.hr/u.s not being simplified
             try:
                 decomposed_unit = self.unit.decompose(unit_bases)
                 self.unit = ((1*decomposed_unit).decompose(unit_bases)).unit
-                self.log_unit_converter = torch.log(((1*decomposed_unit).decompose(unit_bases)).value)
-            except:
+                self.log_unit_converter = torch.log(torch.tensor(float(((1*decomposed_unit).decompose(unit_bases)).value)))
+            except Exception:
                 self.unit = self.unit
-                self.log_unit_converter = 0.
+                self.log_unit_converter = torch.tensor(0.)
                 
 
 
@@ -75,10 +93,12 @@ class GammaLogExposure:
                 self.log_obs_time_map = log_obs_time_map
 
                 if self.log_obs_time_map is None:
-                    self.log_obs_time_map = (live_times/u.s).to("")
+                    # total live time in seconds (self.live_times is already in s) -> log, as the name says
+                    self.log_obs_time_map = torch.log(torch.as_tensor(self.live_times, dtype=torch.get_default_dtype()).sum())
 
+                self.log_obs_time_map = torch.as_tensor(self.log_obs_time_map)
                 if self.log_obs_time_map.dim() == 0:
-                    self.log_obs_time_map = torch.full(self.binning_geometry.shape, self.log_obs_time_map)
+                    self.log_obs_time_map = torch.full(self.binning_geometry.shape, float(self.log_obs_time_map))
 
                 self._exp_interpolator = RegularTorchInterpolator(self.binning_geometry.axes, torch.exp(self.log_exposure_map))
                 self._exp_obs_time_interpolator = RegularTorchInterpolator(self.binning_geometry.axes, torch.exp(self.log_obs_time_map))
@@ -89,6 +109,8 @@ class GammaLogExposure:
 
     def __parse_livetime(self, live_times):
 
+        if live_times is None:          # SourceFluxDiscreteLogPrior passes None through; the old code crashed here
+            live_times = 1 * u.s
 
         if isinstance(live_times, u.Quantity):
             if live_times.isscalar:
@@ -112,34 +134,40 @@ class GammaLogExposure:
 
         try:
             self.live_times_values = [live_time.to(self.live_time_units).value for live_time in self.live_times]
-        except:
-            self.live_times_values = [live_time for live_time in self.live_times]
+        except Exception:
+            self.live_times_values = [float(v) for v in np.asarray(torch.as_tensor(self.live_times).detach().cpu(), dtype=float).reshape(-1)]
 
 
-        self.live_times = torch.tensor(self.live_times_values)*(self.live_time_units/u.s).to("")
+        # plain float tensor in SECONDS (tensor * Quantity would otherwise depend on operand order)
+        scale = float((1 * self.live_time_units / u.s).to("").value)
+        self.live_times = torch.tensor([float(v) for v in self.live_times_values], dtype=torch.get_default_dtype()) * scale
 
 
 
     def __parse_pointing_dirs(self, pointing_dirs):
-
-        if np.asarray(pointing_dirs).ndim <2:
-            pointing_dirs = torch.stack([pointing_dirs], dim=0)
-
+        # None -> the IRF's pointing (if it has one) else the geometry centre.  The old code
+        # called torch.stack([None]) before the None checks and always raised.
+        if pointing_dirs is None:
+            if getattr(self.irfs, "pointing_dir", None) is not None:
+                pointing_dirs = torch.as_tensor(self.irfs.pointing_dir)
+            else:
+                pointing_dirs = self.binning_geometry.spatial_centre
+        pointing_dirs = torch.as_tensor(np.asarray([torch.as_tensor(p).detach().cpu().numpy() for p in pointing_dirs])
+                                        if isinstance(pointing_dirs, (list, tuple)) else pointing_dirs,
+                                        dtype=self.binning_geometry.lon_axis.dtype)
+        if pointing_dirs.ndim < 2:
+            pointing_dirs = pointing_dirs.reshape(1, -1)
         self.pointing_dirs = pointing_dirs
-
-        if hasattr(self.irfs, "pointing_dir") and (self.pointing_dirs is None):
-            self.pointing_dirs = torch.stack([self.irfs.pointing_dir], dim=0)
-
-        elif self.pointing_dirs is None:
-            self.pointing_dirs = torch.stack([self.binning_geometry.spatial_centre], dim=0)
-
-
-        self.pointing_dirs = torch.tensor(self.pointing_dirs)
 
 
 
     def __call__(self, *args, **kwargs):
-        return torch.log(self.exp_interpolator(*args, **kwargs))+self.log_unit_converter
+        # log_unit_converter is already folded into log_exposure_map by refresh() / add_single_exposure().
+        # Zero exposure is returned as log(smallest normal number) rather than -inf: a source cube that is
+        # -inf in a bin makes logaddexp(-inf, -inf) and its gradient NaN downstream, and backends that
+        # flush denormals (Apple MPS, float32) hit this wherever A_eff is at its floor.
+        out = torch.log(self.exp_interpolator(*args, **kwargs))
+        return out.clamp_min(math.log(torch.finfo(out.dtype).tiny))
 
 
     # Support for indexing like a list or array
@@ -155,9 +183,9 @@ class GammaLogExposure:
                 raise NotImplementedError("Adding exposures for different binning geometries is currently not supported.")
 
 
-            other_unit_scaling = (self.aeff_units/other.aeff_units).to("")
+            other_unit_scaling = float((1 * other.aeff_units / self.aeff_units).to("").value)   # other -> self units
 
-            new_exposure_map = torch.logaddexp(self.log_exposure_map, torch.log(other_unit_scaling)+other.log_exposure_map)
+            new_exposure_map = torch.logaddexp(self.log_exposure_map, float(np.log(other_unit_scaling)) + other.log_exposure_map)
 
 
             return GammaLogExposure(binning_geometry=self.binning_geometry, 
@@ -181,7 +209,7 @@ class GammaLogExposure:
         
         if np.asarray(pointing_dirs).ndim <2:
 
-            same_as_cached = torch.any((torch.tensor(self.pointing_dirs) == pointing_dirs).all(axis=1))
+            same_as_cached = torch.any((torch.as_tensor(self.pointing_dirs) == torch.as_tensor(pointing_dirs)).all(dim=1))
 
             return same_as_cached
 
@@ -245,7 +273,7 @@ class GammaLogExposure:
 
         pointing_dir = torch.as_tensor(pointing_dir).reshape(1, -1)
         self.pointing_dirs = torch.cat([torch.as_tensor(self.pointing_dirs).reshape(-1, pointing_dir.shape[1]), pointing_dir], 0)
-        self.live_times = torch.cat([torch.as_tensor(self.live_times).reshape(-1), torch.tensor([float(live_time.value)])])
+        self.live_times = torch.cat([torch.as_tensor(self.live_times).reshape(-1), torch.tensor([float(live_time.value)], dtype=self.live_times.dtype, device=self.live_times.device)])
 
 
 
@@ -271,7 +299,7 @@ class GammaLogExposure:
             else:
                 self.add_single_exposure(pointing_dir=pointing_dirs, live_time=live_times)
 
-        return self._exp_interpolator((energy, lon , lat), *args, **kwargs)
+        return self._exp_interpolator((energy, lon, lat))
         
 
     def peek(self, fig_kwargs=None, pcolormesh_kwargs=None, plot_kwargs=None, **kwargs):

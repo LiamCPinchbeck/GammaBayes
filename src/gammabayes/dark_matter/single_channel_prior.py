@@ -7,9 +7,13 @@ from gammabayes.core.batching import as_param
 
 
 class SingleChannelDMPrior(TwoCompFluxPrior):
+    """Dark-matter annihilation into a single channel: the :class:`CustomDMRatiosModel` flux
+    <sigma v> / (8 pi s m^2) dN/dE x dJ/dOmega without branching ratios.  ``channel`` uses the
+    darkSUSY names (``'W+W-'``, ``'bb'``, ``'tau+tau-'``, ...); ``mass`` [TeV] and ``sigmav`` [cm^3 s^-1]
+    may be overridden at call time through ``spectral_params``."""
 
                                     # cm^3/s          TeV
-    def __init__(self, channel='W', 
+    def __init__(self, channel='W+W-', 
                     binning_geometry=None,
                     sigmav=3e-26, mass=1., symmetry_factor=torch.tensor(1.), 
                     spatial_profile=Einasto_Profile,

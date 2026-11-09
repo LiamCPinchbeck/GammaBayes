@@ -12,7 +12,7 @@ class RegularTorchInterpolator:
     tensors may have *any* shape and are broadcast against each other (so a
     ``(B, 1)`` mass grid and a ``(1, E)`` energy grid evaluate on a ``(B, E)``
     mesh); the result has the broadcast shape.  Queries outside the grid are
-    clamped to the edge (constant extrapolation), as before.
+    clamped to the edge (constant extrapolation).
     """
 
     def __init__(self, points, values):
@@ -27,6 +27,7 @@ class RegularTorchInterpolator:
         for i, p in enumerate(self.points):
             assert isinstance(p, torch.Tensor)
             assert p.ndim == 1 and p.shape[0] == self.values.shape[i]
+        self._dev_cache = {}          # device -> (points, values); avoids re-copying the table every call
 
     def __call__(self, points_to_interp):
         assert len(points_to_interp) == self.n
@@ -36,9 +37,13 @@ class RegularTorchInterpolator:
         out_shape = qs[0].shape
         qs = [q.reshape(-1).contiguous() for q in qs]
 
+        dev = qs[0].device
+        if dev not in self._dev_cache:
+            self._dev_cache[dev] = (tuple(p.to(dev) for p in self.points), self.values.to(dev))
+        points, values = self._dev_cache[dev]
+
         idxs, dists, overalls = [], [], []
-        for p, x in zip(self.points, qs):
-            p = p.to(x.device)
+        for p, x in zip(points, qs):
             idx_right = torch.bucketize(x, p)
             idx_right = idx_right.clamp(max=p.shape[0] - 1)
             idx_left = (idx_right - 1).clamp(0, p.shape[0] - 1)
@@ -51,7 +56,6 @@ class RegularTorchInterpolator:
             dists.append((dist_left, dist_right))
             overalls.append(dist_left + dist_right)
 
-        values = self.values.to(qs[0].device)
         numerator = 0.
         for indexer in product([0, 1], repeat=self.n):
             as_s = [idx[onoff] for onoff, idx in zip(indexer, idxs)]

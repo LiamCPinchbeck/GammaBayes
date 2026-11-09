@@ -26,7 +26,7 @@ torch.set_default_dtype(torch.float64)
 B = 5
 
 
-# ----------------------------------------------------------------- fixtures
+
 @pytest.fixture(scope="module")
 def geom():
     return GammaBinning(energy_res=4, energy_min=0.3, energy_max=30.,
@@ -55,7 +55,7 @@ def _squeeze1(x):
     return x[0] if x.shape[0] == 1 else x
 
 
-# -------------------------------------------------------------- helpers
+
 def test_as_param_and_batch_size():
     assert as_param(2.0, 2).shape == (1, 1, 1)
     assert as_param(torch.tensor(2.0), 1).shape == (1, 1)
@@ -69,7 +69,7 @@ def test_as_param_and_batch_size():
     assert promote_batch(torch.zeros(3, 4, 5), 2).shape == (3, 4, 5)
 
 
-# --------------------------------------------------------- interpolator
+
 def test_interpolator_broadcast_matches_flat():
     ax0 = torch.linspace(0, 1, 7)
     ax1 = torch.linspace(-1, 1, 9)
@@ -87,7 +87,7 @@ def test_interpolator_broadcast_matches_flat():
     assert torch.allclose(itp((torch.tensor([5.]), torch.tensor([0.]))), itp((torch.tensor([1.]), torch.tensor([0.]))))
 
 
-# ------------------------------------------------------------ spectral
+
 def test_power_laws(geom):
     E = geom.energy_axis
     idx = torch.rand(B) + 2.; phi0 = 10 ** (-13 + torch.rand(B))
@@ -109,7 +109,7 @@ def test_power_laws(geom):
         assert out.shape == (B, len(E)) and torch.allclose(out, loop), cls.__name__
 
 
-# ------------------------------------------------------------- spatial
+
 def test_point_and_gaussian_spatial(geom):
     ll = geom.shaped_grid[0, ..., 1:]
     lon = torch.rand(B) * 2 - 1; lat = torch.rand(B) - 0.5
@@ -132,7 +132,7 @@ def test_point_and_gaussian_spatial(geom):
     assert iso(ll).shape == (1, *ll.shape[:-1])
 
 
-# ---------------------------------------------------------- DM profiles
+
 def _old_logdiffJ_einasto(prof, theta_deg, alpha):
     """Verbatim pre-batching LOS integral (scalar alpha) for the reference."""
     th = torch.deg2rad(theta_deg).clamp(min=torch.deg2rad(torch.tensor(prof.theta_min_deg)))
@@ -247,8 +247,11 @@ def test_custom_ratios_model(geom, fake_tables):
     model.log_J(alpha=alpha + 0.01)
     assert model.log_spectrum(mass=mass, sigmav=1e-26, ratios=r, kappa=spec["kappa"]) is lS
 
+########################################################################
+#  TwoCompFluxPrior
+########################################################################
 
-# ----------------------------------------------------- TwoCompFluxPrior
+
 def test_two_comp_broadcast(geom):
     prior = TwoCompFluxPrior(spectral_comp=PowerLaw(), spatial_comp=PointSpatial_PriorComp(),
                              binning_geometry=geom, log_exposure_map=_FakeExposure())

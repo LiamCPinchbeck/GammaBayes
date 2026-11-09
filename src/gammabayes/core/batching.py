@@ -1,6 +1,6 @@
 """Batch-parameter helpers.
 
-Contract used throughout the priors / dark_matter components:
+How batching works throughout the priors / dark_matter components:
 
 * A *parameter* may be a python scalar, a 0-d tensor, or a 1-d tensor of
   shape ``(B,)``.  Several parameters passed together are broadcast to a
@@ -21,7 +21,7 @@ def as_param(x, n_trailing: int, *, like: torch.Tensor | None = None) -> torch.T
     singleton axes, ready to broadcast against an axis-shaped tensor.
 
     ``B`` is 1 for scalars, ``x.shape[0]`` for 1-d input.  Inputs with more
-    than one dimension are an error (the batch contract is 0-d or 1-d).
+    than one dimension are an error (batch parameters are 0-d or 1-d).
     """
     if not torch.is_tensor(x):
         x = torch.as_tensor(x, dtype=like.dtype if like is not None else None,

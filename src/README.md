@@ -1,7 +1,5 @@
 ![Alt text](https://raw.githubusercontent.com/lpin0002/GammaBayes/main/misc/banner_logo_v2.png)
 
-__CODE CURRENTLY NOT IN OPERATIONAL STATE__
-In the middle of a large code refactor and slowly integrating custom code that is not compatible with most of GammaBayes. If you still want to use GammaBayes I would recommend the use of the main branch (stable) or possibly developer branch (more stable than this branch).
 
 __Author(s)__: Liam Pinchbeck (Liam.Pinchbeck@monash.edu)
 
@@ -22,6 +20,12 @@ To reference this code please reference the following paper [2401.13876](https:/
       archivePrefix={arXiv},
       primaryClass={astro-ph.HE}
 }
+
+
+If you are using the GPU accelerated code please also cite the paper "How Can We Be Sure" which should be out soon.
+
+
+
 
 If you use the data from CosmiXs (https://arxiv.org/abs/2312.01153) or QCDUNC (referencing papers that have links to Zenodo databases;https://arxiv.org/abs/2303.11363, https://arxiv.org/abs/2202.11546 ,https://arxiv.org/abs/1812.07424) please also reference those sources. I have the BibTeX belo, but I'd double check them for you usages. And to be clear, we are not affiliated with these works, we just utilise their results.
 
@@ -83,6 +87,39 @@ If you use the data from CosmiXs (https://arxiv.org/abs/2312.01153) or QCDUNC (r
    month=may, pages={007–007} }
 
 
+If you use the default diffuse gamma-ray maps, they come from the GALPROP (https://arxiv.org/abs/2112.12745) package. 
+If you use them please also cite them, and specifically the webrun (https://arxiv.org/abs/1008.3642, https://galprop.stanford.edu/webrun.php), which I used to get some of the results.
+
+@article{Porter:2021tlr,
+    author = "Porter, Troy A. and Johannesson, Gudlaugur and Moskalenko, V. Igor",
+    title = "{The GALPROP Cosmic-ray Propagation and Nonthermal Emissions Framework: Release v57}",
+    eprint = "2112.12745",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.HE",
+    doi = "10.3847/1538-4365/ac80f6",
+    journal = "Astrophys. J. Supp.",
+    volume = "262",
+    number = "1",
+    pages = "30",
+    year = "2022"
+}
+
+@article{VLADIMIROV20111156,
+title = {GALPROP WebRun: An internet-based service for calculating galactic cosmic ray propagation and associated photon emissions},
+journal = {Computer Physics Communications},
+volume = {182},
+number = {5},
+pages = {1156-1161},
+year = {2011},
+issn = {0010-4655},
+doi = {https://doi.org/10.1016/j.cpc.2011.01.017},
+url = {https://www.sciencedirect.com/science/article/pii/S0010465511000373},
+author = {A.E. Vladimirov and S.W. Digel and G. Jóhannesson and P.F. Michelson and I.V. Moskalenko and P.L. Nolan and E. Orlando and T.A. Porter and A.W. Strong},
+keywords = {Astroparticle physics, Diffusion, Elementary particles, Cosmic rays, ISM: general, Dark matter, Diffuse radiation, Gamma rays: ISM, Infrared: ISM, Radio continuum: ISM, X-rays: ISM},
+abstract = {GALPROP is a numerical code for calculating the galactic propagation of relativistic charged particles and the diffuse emissions produced during their propagation. The code incorporates as much realistic astrophysical input as possible together with latest theoretical developments and has become a de facto standard in astrophysics of cosmic rays. We present GALPROP WebRun, a service to the scientific community enabling easy use of the freely available GALPROP code via web browsers. In addition, we introduce the latest GALPROP version 54, available through this service.}
+}
+
+
 
 
 ## Warning
@@ -95,11 +132,17 @@ duplicate the arrays instead of reference the same one.
 
 This coding repository contains a Bayesian Inference pipeline for calculating dark matter related observables from (simulated) observations from the galactic centre. Example files that run the simulation and analysis can be found within the `docs` folder. All documentation for the code is within the notebook files contained within that folder, that make up the [ReadTheDocs](https://gammabayes.readthedocs.io/en/latest/index.html) page and all the major components that make up the analysis in the oncoming publication.
 
-A stable python package version of the code exists on `PyPi` that can be installed with the command,
+GammaBayes 2.x requires **Python 3.10 or newer** and PyTorch >= 2.4 (CPU or CUDA). Install from
+the repository with
 
-`pip install gammabayes`.
+```bash
+pip install torch            # or the CUDA build for your driver, see https://pytorch.org
+pip install -e src/          # from the repository root; add [docs,test] for the optional extras
+```
 
-This will also take care of the required dependencies for the project. 
+A (0.x) release also exists on `PyPI` (`pip install gammabayes`); it predates the torch port and
+does not match the current documentation. The dependencies are listed in `src/setup.py`
+(note the `regions < 0.11` pin required by `gammapy <= 2.1`).
 
 We recommend to look through the tutorials for an overview of the functionality of the code however, the figure below shows the main classes of `GammaBayes` in a UML diagram.
 

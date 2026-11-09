@@ -90,7 +90,7 @@ class CustomDMRatiosModel(TwoCompFluxPrior):
             spatial_profile = spatial_profile(**(spatial_profile_kwargs or {}))
         elif spatial_profile_kwargs:
             raise ValueError("spatial_profile_kwargs given but spatial_profile is already an instance")
-        # NB TwoCompFluxPrior overwrites self.spatial_comp with the cached wrapper,
+        # TwoCompFluxPrior overwrites self.spatial_comp with the cached wrapper,
         # so the profile itself lives under spatial_profile.
         self.spatial_profile = spatial_profile
 
@@ -150,7 +150,7 @@ class CustomDMRatiosModel(TwoCompFluxPrior):
                 flat.update({f"{k}.{kk}": vv for kk, vv in v.items()})
             else:
                 flat[k] = v
-        # NB the energy axis is part of the cache KEY but not of the batch-size check
+        # The energy axis is part of the cache key but not of the batch-size check
         # (it is (E,), not a batch parameter; including it raised 'inconsistent batch sizes').
         if (not self.use_cache or _needs_grad(energy, *flat.values())
                 or batch_size(*flat.values()) > self.cache_max_batch):

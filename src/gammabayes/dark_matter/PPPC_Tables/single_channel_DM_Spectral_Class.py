@@ -1,15 +1,23 @@
-"""
-REPLACES the gammabayes module defining SingleDMSpectralComp (the file loading PPPC_Tables).
-Requires cosmixs_reader.py in the SAME directory as PPPC_reader.py, and the CosmiXs table at
-<data_path>/CosmiXs_Tables/AtProduction-Gamma_COSMIXs.dat (github.com/ajueid/CosmiXs);
-for the delta band: qcdunc_reader.py + <data_path>/QCDUNC_Tables/AtProduction-Ga.dat
-(or the same table named AtProduction-Ga-Combined-Up-QCDUNC.dat)
-(the data/wUncertainty file from github.com/ajueid/qcd-dm.github.io).
+"""Single-channel dark-matter annihilation spectra.
 
-reader kwarg selects the CENTRAL table ('cosmixs' | 'pppc'); the OTHER becomes the kappa
-blend partner:  log dNdE(kappa) = (1-kappa)*log central + kappa*log alt.
-kappa=None (default) -> pure central, back-compatible.
+``SingleDMSpectralComp`` interpolates the tabulated photon yield dN/dlog10(x), x = E / m_chi, of one
+annihilation channel and returns log dN/dE (per TeV) on an energy axis, batched over the DM mass.
+
+Tables (all shipped under ``gammabayes/dark_matter/``):
+
+* CosmiXs (default central table): ``CosmiXs_Tables/AtProduction-Gamma_COSMIXs.dat``
+  (github.com/ajueid/CosmiXs, Arina et al. 2024);
+* PPPC4DMID: ``PPPC_Tables/AtProduction_gamma_EW_corrections.dat`` (Cirelli et al. 2011);
+* QCD-uncertainty band: ``QCDUNC_Tables/AtProduction-Ga.dat`` or
+  ``AtProduction-Ga-Combined-Up-QCDUNC.dat`` (github.com/ajueid/qcd-dm.github.io, Amoroso et al. 2019).
+
+The ``reader`` argument selects the central table (``'cosmixs'`` or ``'pppc'``); the other one is the
+partner of the ``kappa`` blend, log dN/dE(kappa) = (1 - kappa) log dN/dE_central + kappa log dN/dE_other.
+``delta`` moves along the QCD-uncertainty band in units of its +1 sigma edge.  ``kappa=None`` and
+``delta=None`` (the defaults) give the pure central table.  A missing table disables the corresponding
+parameter and prints a one-time warning.
 """
+
 import os, torch
 from typing import Literal
 from functools import partial
@@ -43,6 +51,14 @@ def _qcdunc_table_path():
 
 
 _WARNED = set()
+_READER_CACHE = {}       # table path -> parsed reader; one CustomDMRatiosModel used to re-parse every table per channel
+
+
+def _cached_reader(reader_cls, path):
+    key = (reader_cls.__name__, path)
+    if key not in _READER_CACHE:
+        _READER_CACHE[key] = reader_cls(path)
+    return _READER_CACHE[key]
 
 
 def _warn_once(msg):
@@ -52,7 +68,8 @@ def _warn_once(msg):
 
 
 class SingleDMSpectralComp(BaseSpectral_PriorComp):
-    """Single-channel DM spectra; reader-selectable central table + kappa blend to the other."""
+    """Photon spectrum of one annihilation channel from a selectable central table (CosmiXs or PPPC),
+    optionally blended with the other table (``kappa``) and shifted along the QCD-uncertainty band (``delta``)."""
 
     @staticmethod
     def _load_channel_from_reader(rd, channel, conv=None):
@@ -60,14 +77,15 @@ class SingleDMSpectralComp(BaseSpectral_PriorComp):
             grid = rd[(conv or {}).get(channel, channel)].reshape(rd.output_shape)
         except Exception:
             grid = rd[channel].reshape(rd.output_shape)
+        dt = torch.get_default_dtype()                # tables follow the default dtype (float64 is unavailable on MPS)
         return RegularTorchInterpolator(
-            (torch.log10(torch.tensor(rd.mass_axis)), torch.tensor(rd.log10x_axis)),
-            torch.sqrt(torch.tensor(grid)))          # sqrt-interp preserves positivity
+            (torch.log10(torch.as_tensor(rd.mass_axis, dtype=dt)), torch.as_tensor(rd.log10x_axis, dtype=dt)),
+            torch.sqrt(torch.as_tensor(grid, dtype=dt)))          # sqrt-interp preserves positivity
 
     @classmethod
     def _load_channel(cls, name, channel):
         reader_cls, table, conv = _TABLES[name]
-        return cls._load_channel_from_reader(reader_cls(single_channel_spectral_data_path + table), channel, conv)
+        return cls._load_channel_from_reader(_cached_reader(reader_cls, single_channel_spectral_data_path + table), channel, conv)
 
     def __init__(self, binning_geometry=None, channel='W+W-', mass=torch.tensor(1.),
                  reader: Literal['cosmixs', 'pppc'] = 'cosmixs', *args, **kwargs):
@@ -95,14 +113,15 @@ class SingleDMSpectralComp(BaseSpectral_PriorComp):
         try:
             import numpy as _np
             from .qcdunc_reader import QCDUNCReader
-            _band = QCDUNCReader(_qcdunc_table_path())
+            _band = _cached_reader(QCDUNCReader, _qcdunc_table_path())
             _q = QCDUNCReader.darkSUSY_to_QCDUNC_converter[channel]
             _cen = _band[_q]
             _ratio = _np.where(_cen > 0, _band[_q + '_up'] / _np.maximum(_cen, 1e-300), 1.0)
             _ratio = _np.clip(_ratio, 1.0, 1e3).reshape(_band.output_shape)   # up-edge >= central
+            _dt = torch.get_default_dtype()
             self._interp_band_ratio = RegularTorchInterpolator(
-                (torch.log10(torch.tensor(_band.mass_axis)), torch.tensor(_band.log10x_axis)),
-                torch.sqrt(torch.tensor(_ratio)))
+                (torch.log10(torch.as_tensor(_band.mass_axis, dtype=_dt)), torch.as_tensor(_band.log10x_axis, dtype=_dt)),
+                torch.sqrt(torch.as_tensor(_ratio, dtype=_dt)))
         except Exception as e:
             self._interp_band_ratio = None
             _warn_once(f"QCDUNC band table ({' or '.join(_QCDUNC_NAMES)} in <dark_matter>/QCDUNC_Tables/) unusable "

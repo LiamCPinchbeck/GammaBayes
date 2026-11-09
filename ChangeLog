@@ -1,13 +1,72 @@
-# GammaBayes 2.1.0 (torch port): changes for the HCWBS batched pipeline
+# GammaBayes 2.1.1
+
+## Fixes
+- `GammaLogExposure`: `pointing_dirs=None` and `live_times=None` no longer crash; live times given in any
+  unit are converted once (the unit converter double-counted non-second units); `__call__` no longer
+  adds the unit converter a second time, and returns `log(smallest normal number)` instead of `-inf`
+  for zero exposure so model cubes stay finite and `logaddexp` gradients stay NaN-free
+  (`log_exposure_map` itself still holds `-inf`); `+` works (a `Quantity` reached `torch.log`, and the
+  unit ratio was inverted); construction from an existing `log_exposure_map` works.
+- `GammaBinning`: `__eq__` on the edges (exposures / priors on identical geometries combine),
+  `__repr__`, `padded(pads)` (true-space geometry for `IRFForwardConv`).
+- `IRFExtractor`: explicit `irf_time_seconds=` (0.5 h / 5 h / 50 h prod5 optimisation; the default keeps
+  the 5 h file -- `observation_time` never selected the file), `pointing_dir` stored, `irf_file_path`
+  attribute, clear `NotImplementedError` for `instrument='HESS'`, `log_aeff` / `log_bkg_CCR` /
+  `log_edisp` / `log_psf` return tensors in the input dtype and device, `plot_edisp_*` had true and
+  reconstructed energies swapped.
+- `extract_galprop_components`: energy axis off by one plane (`CRVAL3 + CDELT3*NAXIS3` endpoint);
+  `component='all'` returns the summed template instead of a tuple; FoV margin used `lon_res` (bins per
+  degree) as a width.
+- `IsotropicPowerLaw` / `IsotropicBrokenPowerLaw` rewritten on the 2.x component API (were unusable).
+- `StaticSourceDistTemplate`: wrong attribute name when built from a log template.
+- `utils.integration.construct_log_dx`: 0-d `torch.cat`, log-uniform bin width, torch `logsumexp`.
+- `CTAO_irf_file_utils`: no bare `except` around the IRF tar extraction.
+- `SingleChannelDMPrior`: default `channel='W+W-'` (the old default `'W'` was a PPPC column name that only
+  worked through the PPPC fallback).
+- Docstrings reviewed throughout the torch core; the IRF wrappers now state which quantities are true and
+  which reconstructed (the cosmic-ray background is tabulated in reconstructed energy and position).
+
+## Apple silicon (MPS)
+- Device / dtype hygiene for backends without float64: forward-operator kernels are built on the CPU
+  in float64 and cast to the default dtype / device (`make_forward_irf_kernels(..., device=)`);
+  `GammaBinning.padded`, exposures, the DM spectral tables and GALPROP templates follow
+  `torch.get_default_dtype()`.
+
+## Performance
+- `RegularTorchInterpolator` caches the table per device (it was copied on every call).
+- DM spectral tables (CosmiXs / PPPC / QCDUNC) are parsed once per process instead of once per channel.
+- `IRFKernelDist.sample_kernel` vectorised (was a Python loop over every voxel).
+
+## Packaging
+- `python_requires >= 3.10`; `regions >= 0.9, < 0.11` (gammapy <= 2.1); `[docs]` / `[test]` extras;
+  `QCDUNC_Tables` shipped; `MANIFEST.IN` matches the tree; CI on Python 3.10-3.13 installs the package
+  with its own requirements.
+
+## Documentation
+- Rewritten for 2.x: getting-started pages (installation, concepts, migration from 0.x), six executable
+  tutorials (geometry, IRFs and exposure, source components and batching, dark matter, forward IRF
+  operator, an end-to-end profile-likelihood search), autodoc API reference split into the torch core
+  and the legacy layer, `docs/run_notebooks.sh` + `docs/annotate_timings.py` (execute the tutorials and
+  stamp per-cell wall times).  The tutorials run on CPU, CUDA or Apple MPS (`GAMMABAYES_DOCS_DEVICE`);
+  tutorial 06 profiles the nuisance amplitudes with an analytic Newton template fit, with and without a
+  per-energy-bin background systematic, in seconds on a laptop CPU.  The 0.x notebooks moved to
+  `docs/legacy_tutorials/`.
+
+## Tests
+- `src/gammabayes/tests/test_review_fixes.py` (10 tests, no data files); the 0.x top-level `tests/`
+  directory (numpy-era, pinned to astropy 5 / gammapy 1.1) is removed and CI runs the package tests.
+
+
+# GammaBayes 2.1.0 (torch port)
 
 ## Breaking changes
 - `SingleDMSpectralComp` now **requires** `mass=` at call time (the old `partial(..., mass=1)` default is gone).
 - Component outputs carry a leading batch axis `(B, ...)`. `DiscreteLogPrior.eval_log_on_geom(squeeze=True)`
   (the default) drops `B == 1`, so existing single-point callers are unaffected.
 - Dependencies moved to numpy 2 / astropy 6 / gammapy 2.
-- Projects pinning the auxiliary API should bump it (HCWBS: `AUX_API_VERSION` 11).
+- Downstream projects that pin an API version should bump it.
 
-## A1  Batched evaluation
+## Batched evaluation
 - New `core/batching.py`: `as_param`, `batch_size`, `promote_batch`, `iter_batch_chunks`.
 - TLDR of how data/parameter variables scale now: parameters are scalar or `(B,)`; spectral components return `(B, E)`, spatial `(B, lon, lat)`, rate cubes `(B, E, lon, lat)`.
 - (BIG CHANGE) `RegularTorchInterpolator` vectorisation: query tensors of any shape, broadcast against each other (e.g. `(B, 1)` mass x `(1, E)` energy -> `(B, E)`); device-aware; edge clamping unchanged.
@@ -16,18 +75,18 @@
 - `CustomDMRatiosModel`: ratios as a dict or `(B, n_ch)` tensor; `log_spectrum`, `log_J`; spectral and J caches that are bypassed whenever an input carries autograd state, and only used for small batches.
 - `SourceFluxDiscreteLogPrior` caches the exposure cube per geometry (`_log_exposure_on`).
 
-## A2  IRF convolution memory (legacy operator)
-- `LogSumExpConv3D.forward` is separable (spatial `conv2d` + log-space energy pass): peak memory `O(B E S K_d)` instead of `O(B E S K^3)`; `max_batch=` chunks over B. The old path is kept as `forward_reference`. Both `binning_geometry` and the historical `binnning_geometry` kwarg are accepted `padding=None` -> `k // 2`.
+## IRF convolution memory (legacy operator)
+- `LogSumExpConv3D.forward` is separable (spatial `conv2d` + log-space energy pass): peak memory `O(B E S K_d)` instead of `O(B E S K^3)`; `max_batch=` chunks over B. The old path is kept as `forward_reference`. Both `binning_geometry` and the historical `binnning_geometry` kwarg are accepted; `padding=None` -> `k // 2`.
 - Per-energy spatial kernels: `LogSumExpConv3D(energy_kernel=(K_d,), spatial_kernel=(E, K_h, K_w))`.
-- Semantics should be unchanged. Recommended to update to newer versions for small mis-calcs in edge cases. Shouldn't be result breaking, but can be annoying if running checks.
+- Semantics are unchanged (per-output normalisation, not count conserving). Edge-bin values can differ at the rounding level from the reference path; updating is recommended for bit-level consistency in regression checks.
 
-## A3  Energy-dependent PSF
+## Energy-dependent PSF
 - `IRFExtractor.psf_containment_radius(E, offset, fraction)`: containment radius from the tabulated PSF.
 - `IRFExtractor.psf_sigma_vs_energy(geom, fraction, weighting='aeff'|'uniform'|'counts', counts, pixel_floor)`:
   FoV-averaged Gaussian-equivalent sigma(E_true).
 - `make_spatial_kernel_per_energy(geom, sigma_deg, clearance)`, `make_irf_kernel_per_energy(...)`.
 
-## A4  Fixes
+## Fixes
 - `extract_galprop_components(component='all')` called a non-existent function with an undefined name.
 - `DiscreteLogPrior._cached_rates` was never initialised.
 - `GammaLogExposure`: `raise NotImplemented` -> `NotImplementedError`; list `.append/.extend` on tensors ->
@@ -35,11 +94,11 @@
   stray `print`.
 - `IRFKernelDist.sample_kernel`: lon/lat bounds used the energy-axis length.
 - `BroadBrokenPowerLaw` (undefined `index`, `.value`); `LogParabola` (numpy calls, bad `self`).
-- `CustomDMRatiosModel.__iter__ / items / keys` referenced a never-set attribute...
+- `CustomDMRatiosModel.__iter__ / items / keys` referenced a never-set attribute.
 - `SingleDMSpectralComp`: a missing CosmiXs (kappa) or QCDUNC (delta) table now prints a one-time warning that the parameter has no effect, instead of silently doing nothing. The QCDUNC table is found under either `AtProduction-Ga.dat` or `AtProduction-Ga-Combined-Up-QCDUNC.dat`.
 - New `assert_slots_exist(models_by_name, slots)` in `core/utils.py`: fails loudly on a slot -> source map that points at a missing source.
 
-## A5  Count-conserving IRF forward operator
+## Count-conserving IRF forward operator
 - New `utils/irf_forward.py`:
   - `bin_prob_kernel`: closed-form bin-to-bin migration probabilities, box (x) Gaussian (x) box via
     `G(x) = x Phi(x) + phi(x)`; rows sum to 1.
@@ -67,7 +126,7 @@
 - `test_psf_energy.py`: containment radius / sigma(E), per-energy kernels.
 - `test_irf_forward.py`: dense reference, per-energy PSF, count conservation, batching / gradients, log fallback, `from_edges`, empty-window gradients.
 
-## Known, untouched (not on the HCWBS path)
+## Known issues (legacy modules)
 - `HESSCatalogueSources_Prior.log_func` signature does not match `log_flux_function(grid, ...)`.
-- `IsotropicPowerLaw` / `IsotropicBrokenPowerLaw` pass `spectral_class=` kwargs that `TwoCompFluxPrior` never accepted.
+- `IsotropicPowerLaw` / `IsotropicBrokenPowerLaw` pass `spectral_class=` kwargs that `TwoCompFluxPrior` never accepted (fixed in 2.1.1).
 - `hyper_inference/`, `samplers/`, `utils/cli/` are numpy-era and unmaintained.

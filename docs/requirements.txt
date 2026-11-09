@@ -1,5 +1,10 @@
-myst-parser
-nbsphinx
-sphinx-rtd-theme
-pandoc
-sphinx
+# Documentation build requirements (the package itself must be importable; install GammaBayes'
+# own requirements -- or let conf.py mock the heavy ones).
+sphinx>=7
+sphinx-rtd-theme>=2
+nbsphinx>=0.9
+myst-parser>=2
+ipykernel
+nbconvert
+jupyter_client
+# pandoc is a system package (module load pandoc / conda install pandoc / apt install pandoc)

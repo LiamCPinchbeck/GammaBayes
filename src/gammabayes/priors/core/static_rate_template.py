@@ -3,7 +3,11 @@ from .source_flux_prior import SourceFluxDiscreteLogPrior
 import torch
 
 class StaticDistTemplate(DiscreteLogPrior):
+    """A fixed expected-counts cube (give either the linear ``rate_tensor_template`` or its log).
 
+    The template is returned unchanged by ``eval_log_on_geom``; scale it with an amplitude in the
+    mixture that uses it.
+    """
 
     def __init__(self, rate_tensor_template=None, rate_tensor_logtemplate=None, *args, **kwargs):
 
@@ -48,15 +52,22 @@ class StaticDistTemplate(DiscreteLogPrior):
 
 
 class StaticSourceDistTemplate(SourceFluxDiscreteLogPrior):
+    """A fixed flux (or, with the acceptance-free exposure, rate-density) cube times the exposure.
+
+    Give either ``source_flux_tensor_template`` or ``source_flux_tensor_logtemplate`` on the geometry's
+    grid.  Typical uses: interpolated GALPROP / Fermi templates (a flux, combined with the full exposure)
+    and the cosmic-ray background rate from the IRFs (a rate density per deg^2 TeV s on the
+    reconstructed grid, combined with ``GammaLogExposure(..., use_log_aeff=False)``).
+    """
     def __init__(self, source_flux_tensor_template=None, source_flux_tensor_logtemplate=None, *args, **kwargs):
 
         self.source_flux_tensor_template = source_flux_tensor_template
         self.source_flux_tensor_logtemplate = source_flux_tensor_logtemplate
         
         if source_flux_tensor_template is None:
-            self.rate_tensor_template = self.__source_flux_tensor_template
+            self.source_flux_tensor_template = self.__source_flux_tensor_template
         else:
-            self.rate_tensor_template = source_flux_tensor_template
+            self.source_flux_tensor_template = source_flux_tensor_template
 
         if source_flux_tensor_logtemplate is None:
             self.source_flux_tensor_logtemplate = self.__source_flux_tensor_logtemplate

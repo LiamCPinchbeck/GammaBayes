@@ -15,6 +15,23 @@ import torch
 
 
 class IRFExtractor(object):
+    """CTAO (prod3b / prod5) instrument response functions as torch log-functions.
+
+    Loads the gammapy IRF set for a zenith angle, hemisphere and production version (or any gammapy
+    readable file via ``file_path``) and exposes
+
+    * ``log_aeff(E, lon, lat)``: log effective area [cm^2] at true energy and sky position,
+    * ``log_edisp(E_reco, E_true, lon, lat)``: log energy-dispersion density [TeV^-1],
+    * ``log_psf(lon_reco, lat_reco, E_true, lon, lat)``: log point-spread function [deg^-2],
+    * ``log_bkg_CCR(E, lon, lat)``: log residual cosmic-ray background rate [deg^-2 TeV^-1 s^-1] in
+      **reconstructed** energy and sky position,
+    * ``psf_containment_radius`` / ``psf_sigma_vs_energy``: Gaussian-equivalent PSF widths for the
+      forward operator.
+
+    Offsets from the pointing direction are great-circle distances.  Outputs follow the dtype and device
+    of the input tensors.
+    """
+
     def __init__(self, 
                  zenith_angle:int=20, 
                  hemisphere:str='South', 
@@ -27,25 +44,26 @@ class IRFExtractor(object):
                  CCR_BKG_units: u.Unit = (1/(u.deg**2*u.TeV*u.s)).unit,
                  instrument: str ='CTAO',
                  obs_id: int = None,
-                 pointing_dir= torch.tensor([0, 0])):
+                 pointing_dir= torch.tensor([0, 0]),
+                 irf_time_seconds: float | None = None):
+        """
+        irf_time_seconds: which CTAO prod5 IRF optimisation to load (1800, 18000 or 180000 s, i.e. the
+            0.5 h / 5 h / 50 h cut optimisations; the nearest is used).  ``None`` keeps the historical
+            behaviour of always loading the 5 h file.  ``observation_time`` does not select the file.
+        """
 
         self._format_instrument(instrument)
 
 
         self.file_path = file_path
         self.observation_time = observation_time
-        if hasattr(self.observation_time, "unit"):
-            irf_time_in_seconds = self.observation_time.to(u.s)
-
-
-        else:
-            irf_time_in_seconds = 180000
+        self.pointing_dir = torch.as_tensor(pointing_dir, dtype=torch.get_default_dtype())
+        self.irf_time_seconds = 18000 if irf_time_seconds is None else float(irf_time_seconds)
 
         if self.file_path is None:
-            # self.file_path = resources_dir+f'/irf_fits_files/Prod5-South-20deg-AverageAz-14MSTs37SSTs.{irf_time_in_seconds}s-v0.1.fits'
-
             if self.instrument in ['CTA', 'CTAO']:
-                self._CTAO_init(zenith_angle=zenith_angle, hemisphere=hemisphere, prod_vers=prod_vers)
+                self._CTAO_init(zenith_angle=zenith_angle, hemisphere=hemisphere, prod_vers=prod_vers,
+                                irf_time_seconds=self.irf_time_seconds)
             else:
                 self._HESS_init(pointing_dir=pointing_dir, obs_id=obs_id)
 
@@ -94,25 +112,35 @@ class IRFExtractor(object):
 
 
 
-    def _CTAO_init(self, zenith_angle, hemisphere, prod_vers, *args, **kwargs):
-        prod_version, fits_file_path = find_ctao_irf_file_path(zenith_angle=zenith_angle, 
-                                            hemisphere=hemisphere, 
-                                            prod_vers=prod_vers)
-        
+    def _CTAO_init(self, zenith_angle, hemisphere, prod_vers, irf_time_seconds=18000, *args, **kwargs):
+        prod_version, fits_file_path = find_ctao_irf_file_path(zenith_angle=zenith_angle,
+                                            hemisphere=hemisphere,
+                                            prod_vers=prod_vers,
+                                            irf_time_seconds=irf_time_seconds)
+        self.irf_file_path = fits_file_path
         self.extracted_default_irfs  = load_irf_dict_from_file(fits_file_path)
+
+    def _HESS_init(self, pointing_dir=None, obs_id=None, *args, **kwargs):
+        # The HESS branch was referenced but never implemented (AttributeError at runtime).
+        raise NotImplementedError(
+            "instrument='HESS' is not implemented in IRFExtractor; pass file_path= to a gammapy-readable "
+            "IRF file instead (see response_functions/instrument_specific_interfaces/HESS_IRFs).")
 
 
 
     def log_aeff(self, energy, lon, lat, pointing_dir=torch.tensor([0,0]), parameters={}):
-
+        """Log effective area [``aeff_units``] at true energy ``energy`` [TeV] and true sky position
+        (``lon``, ``lat``) [deg]; zero area is floored at exp(-100), undefined energies give NaN
+        (turned into zero exposure by :class:`~gammabayes.core.exposure.GammaLogExposure`)."""
 
         energy_temp = energy.detach().cpu().numpy()
         offsets = haversine(lon, lat, pointing_dir[0], pointing_dir[1]).detach().cpu().numpy()*u.deg
 
-        result = torch.tensor(self.aeff_default.evaluate(energy_true = energy_temp*u.TeV, 
-                                offset=offsets).to(self.aeff_units).value).log()
+        result = torch.as_tensor(self.aeff_default.evaluate(energy_true = energy_temp*u.TeV,
+                                offset=offsets).to(self.aeff_units).value,
+                                dtype=energy.dtype, device=energy.device).log()   # was float64 CPU regardless of input
 
-        result = torch.where(torch.isneginf(result), -100, result)
+        result = torch.where(torch.isneginf(result), torch.full_like(result, -100.), result)
 
         return result
 
@@ -120,65 +148,52 @@ class IRFExtractor(object):
     def log_edisp(self, recon_energy, 
                   true_energy, true_lon, true_lat, 
                   pointing_dir=torch.tensor([0.,0.]), parameters:dict={}, migration_cut=torch.tensor(11.)):
-        """
-        Wrapper for the Gammapy interpretation of the CTA energy dispersion function.
+        """Log energy-dispersion density P(E_reco | E_true, offset) [``edisp_units``, TeV^-1].
 
         Args:
-            recon_energy (torch.Tensor): Measured energy value by the CTA.
-            true_energy (torch.Tensor): True energy of a gamma-ray event detected by the CTA.
-            true_lon (torch.Tensor): True FOV longitude of a gamma-ray event detected by the CTA.
-            true_lat (torch.Tensor): True FOV latitude of a gamma-ray event detected by the CTA.
-            pointing_dir (list[Quantity], optional): Pointing direction. Defaults to [0*u.deg, 0*u.deg].
+            recon_energy: reconstructed energy [TeV].
+            true_energy: true energy [TeV].
+            true_lon, true_lat: true sky position [deg] (sets the offset from the pointing).
+            pointing_dir: pointing direction [deg].
+            migration_cut: migrations E_reco / E_true outside (1/cut, cut) are set to zero density.
 
         Returns:
-            float: Natural log of the CTA energy dispersion likelihood for the given gamma-ray event data.
+            Natural log of the dispersion density, broadcast shape of the inputs, dtype and device of
+            ``recon_energy``.
         """
 
 
-        offset = haversine(true_lon, true_lat, pointing_dir[0], pointing_dir[1])
+        recon_energy = torch.as_tensor(recon_energy); true_energy = torch.as_tensor(true_energy, dtype=recon_energy.dtype, device=recon_energy.device)
+        pointing_dir = torch.as_tensor(pointing_dir, dtype=recon_energy.dtype, device=recon_energy.device)
+        offset = haversine(torch.as_tensor(true_lon, dtype=recon_energy.dtype, device=recon_energy.device),
+                           torch.as_tensor(true_lat, dtype=recon_energy.dtype, device=recon_energy.device), pointing_dir[0], pointing_dir[1])
+        migration = recon_energy / true_energy
 
-        migration = recon_energy/true_energy
+        # gammapy works in numpy: round-trip through the CPU, come back in the input dtype / device
+        _np = lambda t: torch.as_tensor(t).detach().cpu().numpy()
+        vals = (self.edisp_default.evaluate(energy_true=_np(true_energy) * u.TeV, migra=_np(migration),
+                                            offset=_np(offset) * u.deg) / (_np(recon_energy) * u.TeV)).to(self.edisp_units).value
+        edisp_val = torch.as_tensor(np.asarray(vals), dtype=recon_energy.dtype, device=recon_energy.device)
+        edisp_val = torch.where((migration < migration_cut) & (migration > 1 / migration_cut), edisp_val, torch.zeros_like(edisp_val))
 
-
-
-        edisp_val = torch.where(torch.logical_and(migration<migration_cut, migration>1/migration_cut), torch.tensor((self.edisp_default.evaluate(energy_true=true_energy*u.TeV,
-                                                        migra = migration, 
-                                                        offset=offset*u.deg)/(recon_energy*u.TeV)).to(self.edisp_units).value), 0)
-
-
-        # edisp output is dimensionless when it should have units of 1/TeV
-        log_output = (edisp_val).log()
-
-        return log_output
+        return edisp_val.log()
 
 
 
     def log_psf(self, recon_lon, recon_lat, 
                 true_energy, true_lon, true_lat, 
                 pointing_dir=torch.tensor([0.,0.]), parameters:dict={}):
-        """
-        Wrapper for the Gammapy interpretation of the CTA point spread function.
+        """Log point-spread-function density [``psf_units``, deg^-2] for reconstructing an event of true
+        energy ``true_energy`` and true position (``true_lon``, ``true_lat``) at (``recon_lon``,
+        ``recon_lat``); all angles in degrees.  The result has the dtype and device of ``true_energy``."""
 
-        Args:
-            recon_lon (torch.Tensor): Measured FOV longitude of a gamma-ray event detected by the CTA.
-            recon_lat (torch.Tensor): Measured FOV latitude of a gamma-ray event detected by the CTA.
-            true_energy (torch.Tensor): True energy of a gamma-ray event detected by the CTA.
-            true_lon (torch.Tensor): True FOV longitude of a gamma-ray event detected by the CTA.
-            true_lat (torch.Tensor): True FOV latitude of a gamma-ray event detected by the CTA.
-            pointing_dir (list[Quantity], optional): Pointing direction. Defaults to [0*u.deg, 0*u.deg].
-
-        Returns:
-            float: Natural log of the CTA point spread function likelihood for the given gamma-ray event data.
-        """
-
-        rad = haversine(recon_lon.flatten(), recon_lat.flatten(), true_lon.flatten(), true_lat.flatten(),).flatten()
-
-        offset  = haversine(true_lon.flatten(), true_lat.flatten(), pointing_dir[0], pointing_dir[1]).flatten()
-
-        output = torch.tensor(self.psf_default.evaluate(energy_true=true_energy*u.TeV, rad = rad, 
-                                                  offset=offset*u.deg).to(self.psf_units).value).log()
-                
-        return output
+        true_energy = torch.as_tensor(true_energy)
+        rad = haversine(recon_lon.flatten(), recon_lat.flatten(), true_lon.flatten(), true_lat.flatten()).flatten()
+        offset = haversine(true_lon.flatten(), true_lat.flatten(), pointing_dir[0], pointing_dir[1]).flatten()
+        _np = lambda t: torch.as_tensor(t).detach().cpu().numpy()
+        vals = self.psf_default.evaluate(energy_true=_np(true_energy) * u.TeV, rad=_np(rad) * u.deg,
+                                         offset=_np(offset) * u.deg).to(self.psf_units).value
+        return torch.as_tensor(np.asarray(vals), dtype=true_energy.dtype, device=true_energy.device).log()
 
 
 
@@ -186,19 +201,22 @@ class IRFExtractor(object):
     def log_bkg_CCR(self, energy, lon, lat, 
                     spectral_parameters:dict={}, spatial_parameters:dict={},
                     pointing_dir=torch.tensor([0.,0.]), ):
-        """
-        Wrapper for the Gammapy interpretation of the log of the CTA's background charged cosmic-ray mis-identification rate.
+        """Log rate density of residual (mis-identified) cosmic-ray background events.
+
+        The background IRF is tabulated in **reconstructed** quantities: ``energy`` is the reconstructed
+        energy [TeV] and (``lon``, ``lat``) the reconstructed sky position [deg].  The rate is per
+        ``CCR_BKG_units`` (deg^-2 TeV^-1 s^-1 by default) and already includes the acceptance, so it is
+        combined with the acceptance-free exposure (``GammaLogExposure(..., use_log_aeff=False)``) and
+        added to the model *after* the IRF forward operator.
 
         Args:
-            energy (torch.Tensor): True energy of a gamma-ray event detected by the CTA.
-            lon (torch.Tensor): True FOV longitude of a gamma-ray event detected by the CTA.
-            lat (torch.Tensor): True FOV latitude of a gamma-ray event detected by the CTA.
-            spectral_parameters (dict, optional): Spectral parameters. Defaults to {}.
-            spatial_parameters (dict, optional): Spatial parameters. Defaults to {}.
-            pointing_dir (list[Quantity], optional): Pointing direction. Defaults to [0*u.deg, 0*u.deg].
+            energy: reconstructed energy [TeV].
+            lon, lat: reconstructed Galactic longitude / latitude [deg].
+            spectral_parameters, spatial_parameters: unused, kept for interface compatibility.
+            pointing_dir: pointing direction [deg], used for the offset.
 
         Returns:
-            float: Natural log of the charged cosmic ray mis-identification rate for the CTA.
+            Natural log of the background rate density, same shape, dtype and device as ``energy``.
         """
 
         offset  = haversine(lon, lat, pointing_dir[0], pointing_dir[1]).detach().cpu().numpy()
@@ -207,19 +225,19 @@ class IRFExtractor(object):
 
 
 
-        return torch.tensor(self.CCR_BKG.evaluate(energy=energy_temp*u.TeV, offset=offset*u.deg).to(self.CCR_BKG_units).value).log()
+        return torch.as_tensor(self.CCR_BKG.evaluate(energy=energy_temp*u.TeV, offset=offset*u.deg).to(self.CCR_BKG_units).value,
+                               dtype=energy.dtype, device=energy.device).log()
     
 
     
     # ------------------------------------------------------------------
-    # Energy-calibrated PSF (A3)
+    # Energy-calibrated PSF
     # ------------------------------------------------------------------
     def psf_containment_radius(self, energy_true, offset, fraction=0.68, rad_max_deg=3.0, n_rad=600):
         """Containment radius [deg] of the PSF at (energy_true [TeV], offset [deg]).
 
-        Computed by integrating ``psf.evaluate`` on a log-spaced radial grid
-        and inverting the cumulative, so it does not depend on the gammapy
-        version's ``containment_radius`` signature.  ``energy_true`` and
+        Computed by integrating ``psf.evaluate`` on a log-spaced radial grid and inverting the
+        cumulative distribution, independently of the gammapy version.  ``energy_true`` and
         ``offset`` are broadcast against each other; returns a numpy array.
         """
         energy_true = np.atleast_1d(np.asarray(energy_true, dtype=float))
@@ -302,10 +320,10 @@ class IRFExtractor(object):
 
 
         edisp_values = self.log_edisp(
-            recon_energy=flattened_energy_meshes[0], 
-            true_energy=flattened_energy_meshes[1],
+            recon_energy=flattened_energy_meshes[1],      # meshgrid order is (true, measured)
+            true_energy=flattened_energy_meshes[0],
             true_lon=centre_spatial[0],
-            true_lat=centre_spatial[1], 
+            true_lat=centre_spatial[1],
             migration_cut=torch.tensor(11.)).reshape(energy_meshes[0].shape).exp()
 
         fig, ax = plt.subplots(1,1)
@@ -339,10 +357,10 @@ class IRFExtractor(object):
 
 
         edisp_values = self.log_edisp(
-            recon_energy=flattened_energy_meshes[0], 
-            true_energy=flattened_energy_meshes[1],
+            recon_energy=flattened_energy_meshes[1],      # meshgrid order is (true, measured)
+            true_energy=flattened_energy_meshes[0],
             true_lon=centre_spatial[0],
-            true_lat=centre_spatial[1], 
+            true_lat=centre_spatial[1],
             migration_cut=torch.tensor(10.)).reshape(energy_meshes[0].shape).exp()
 
         fig, ax = plt.subplots(1,1)
@@ -383,10 +401,10 @@ class IRFExtractor(object):
         num_offsets = len(offsets)
         for pos_idx, offset in enumerate(offsets):
             edisp_values = self.log_edisp(
-                recon_energy=flattened_energy_meshes[0], 
-                true_energy=flattened_energy_meshes[1],
+                recon_energy=flattened_energy_meshes[1],      # meshgrid order is (true, measured)
+                true_energy=flattened_energy_meshes[0],
                 true_lon=centre_spatial[0]+offset,
-                true_lat=centre_spatial[1], 
+                true_lat=centre_spatial[1],
                 migration_cut=torch.tensor(10.)).reshape(energy_meshes[0].shape).exp()
 
             ax.loglog(meas_energy_axis, edisp_values.squeeze(), c=cmap((pos_idx/num_offsets+0.5)/1.5))

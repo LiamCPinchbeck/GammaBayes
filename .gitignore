@@ -41,3 +41,6 @@ docs/tutorials/irf_norm_matrix.npy
 docs/tutorials/test_results.pkl
 docs/tutorials/tutorial_data/measured_data.h5
 *egg-info*
+*.gb_venv*
+*._*
+*.vscode*

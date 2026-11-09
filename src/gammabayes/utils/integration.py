@@ -29,11 +29,10 @@ def construct_log_dx(axis):
     # If we ever have differences ~1e-8 
     if torch.isclose(dx[1], dx[0]):
         # Equal spacing, therefore the last dx can just be the same as the second last
-        dx = torch.cat((dx, dx[-1]))
+        dx = torch.cat((dx, dx[-1:]))          # dx[-1] is 0-d and cannot be concatenated
     else:
-
-        # Presuming log-uniform spacing
-        dx = axis*(10**(torch.log10(axis[1])-torch.log10(axis[0])))
+        # Presuming log-uniform spacing: forward difference axis_{i+1} - axis_i = axis_i * (10**d - 1)
+        dx = axis*(10**(torch.log10(axis[1])-torch.log10(axis[0])) - 1.)
 
     return torch.log(dx)
 
@@ -52,8 +51,8 @@ def logspace_riemann(logy, x, axis: int=-1):
     Performs Riemann sum integration in logarithmic integrand space for linear- or log-spaced axes.
 
     Args:
-        logy (): Logarithm of function values.
-        x (): Axis values.
+        logy (tensor): Logarithm of the integrand.
+        x (tensor): Axis values (linearly or logarithmically spaced).
         axis (int, optional): Axis along which to integrate. Defaults to -1.
 
     Returns:
@@ -67,7 +66,7 @@ def logspace_riemann(logy, x, axis: int=-1):
     for index in indices:
         logdx = logdx.unsqueeze(index)
 
-    return special.logsumexp(logy+logdx, axis=axis)
+    return torch.logsumexp(logy+logdx, dim=axis)
 
 
 

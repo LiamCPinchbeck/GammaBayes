@@ -39,8 +39,9 @@ class Einasto_Profile(DM_Profile):
 
         Args:
             alpha (tensor, optional): Default Einasto shape parameter. Defaults to 0.17.
-            rho_s (tensor, optional): Default scale density. Defaults to 1. * u.Unit("TeV / cm3").
-            r_s (tensor, optional): Default scale radius. Defaults to 20.00 * u.Unit("kpc").
+            rho_s (tensor, optional): Default scale density [TeV cm^-3]. Defaults to 0.001; it is
+                re-derived from the local density at call time.
+            r_s (tensor, optional): Default scale radius [kpc]. Defaults to 20.
         """
 
 
@@ -65,15 +66,15 @@ class GNFW_Profile(DM_Profile):
         Computes the logarithm of the GNFW density profile.
 
         Args:
-            radius (float | np.ndarray): Radial distance.
-            r_s (float): Scale radius.
-            alpha (float): alpha parameter.
-            beta (float): beta parameter.
-            gamma (float): gamma parameter.
-            rho_s (float): Scale density.
+            radius (tensor): Radial distance [kpc].
+            r_s (tensor): Scale radius [kpc].
+            alpha (tensor): Transition sharpness.
+            beta (tensor): Outer slope.
+            gamma (tensor): Inner slope.
+            rho_s (tensor): Scale density [TeV cm^-3].
 
         Returns:
-            float | np.ndarray: Logarithm of the density profile.
+            tensor: Logarithm of the density profile.
         """
         
         rr = radius / r_s
@@ -93,11 +94,12 @@ class GNFW_Profile(DM_Profile):
         Initializes the GNFW_Profile class.
 
         Args:
-            default_alpha (float | int, optional): Default alpha parameter. Defaults to 1.
-            default_beta (float | int, optional): Default beta parameter. Defaults to 3.
-            default_gamma (float | int, optional): Default gamma parameter. Defaults to 1.
-            default_rho_s (float, optional): Default scale density. Defaults to 0.001 ("TeV / cm3").
-            default_r_s (float, optional): Default scale radius. Defaults to 24.42 ("kpc").
+            alpha (tensor, optional): Default transition sharpness. Defaults to 1.
+            beta (tensor, optional): Default outer slope. Defaults to 3.
+            gamma (tensor, optional): Default inner slope. Defaults to 1 (NFW).
+            rho_s (tensor, optional): Default scale density [TeV cm^-3]. Defaults to 0.001; it is
+                re-derived from the local density at call time.
+            r_s (tensor, optional): Default scale radius [kpc]. Defaults to 24.42.
         """
         super().__init__(
             log_profile_func=self.log_density_profile_func, 

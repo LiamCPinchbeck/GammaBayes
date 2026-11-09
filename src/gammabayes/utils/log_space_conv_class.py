@@ -6,8 +6,8 @@ Output bin i:
 
 i.e. a dE-weighted (energy-integrating) convolution, renormalised per output
 bin by the kernel weight that lands on in-domain input ("live weight"), so
-FoV-edge bins are a well defined weighted average that does not depend on the
-kernel clearance.  See the comment in ``forward_reference`` for the history.
+FoV-edge bins are a well defined weighted average that doesn't depend on the
+kernel clearance.
 
 Memory: the reference implementation materialised every (K_d*K_h*K_w)-tap
 patch, i.e. O(B * E * S * K^3).  ``forward`` exploits separability
@@ -16,7 +16,7 @@ space with a per-plane max shift) followed by a small log-space energy pass,
 giving O(B * E * S * K_d) peak memory.  The live-weight normaliser factorises
 the same way and is precomputed once per input shape.
 
-Per-energy spatial kernels (energy-calibrated PSF, A3) are supported: pass a
+Per-energy spatial kernels (energy-calibrated PSF) are supported: pass a
 ``(E, K_h, K_w)`` spatial kernel and the spatial pass becomes a grouped
 ``conv2d`` with one group per true-energy plane.
 
@@ -25,8 +25,8 @@ Numerics: both passes run in linear space after an exp-shift (per
 pass), so values more than ~87 nats (fp32) / ~700 nats (fp64) below the
 shift underflow to zero.  The energy pass measures the cube's dynamic range
 and falls back to an exact log-space path above ``linear_energy_max_range``
-nats, so the only approximation left is the within-plane spatial one, far
-beyond the dynamic range of any rate cube.  Like the reference, the operator is a
+nats, so the only approximation left is the within-plane spatial one,
+beyond the usual range of rate cubes.  Like the reference, the operator is a
 cross-correlation; kernels are symmetric so this is immaterial.
 """
 import torch
